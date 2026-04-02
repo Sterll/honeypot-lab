@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honeypot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <header class="hdr">
+    <h1 class="logo">honeypot</h1>
+    <span class="hdr-target">10.30.30.10:2222</span>
+
+    <nav class="hdr-stats">
+      <span class="hstat"><strong id="statConnections">0</strong> conn</span>
+      <span class="hstat"><strong id="statUniqueIps">0</strong> IPs</span>
+      <span class="hstat"><strong id="statCredentials">0</strong> creds</span>
+      <span class="hstat"><strong id="statSessions">0</strong> sess</span>
+      <span class="hstat"><strong id="statCommands">0</strong> cmds</span>
+      <span class="hstat"><strong id="statDownloads">0</strong> files</span>
+    </nav>
+
+    <div class="hdr-right">
+      <span class="hdr-last">Last: <span id="lastEventTime">--</span></span>
+      <button class="reset-btn" onclick="resetAll()">Clear data</button>
+      <div class="ws-status" id="wsStatus">
+        <span class="ws-dot"></span>
+        <span class="ws-label">Offline</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="col-main">
+
+      <section class="sec sec-map">
+        <div class="sec-bar">
+          <h2>Attack Origins</h2>
+          <span class="counter" id="geoCount">0 sources</span>
+        </div>
+        <div id="map"></div>
+      </section>
+
+      <section class="sec sec-feed">
+        <div class="sec-bar">
+          <h2>Live Activity</h2>
+          <div class="feed-filters">
+            <button class="fbtn active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="fbtn" data-filter="auth" onclick="setFilter('auth')">Auth</button>
+            <button class="fbtn" data-filter="cmd" onclick="setFilter('cmd')">Commands</button>
+            <button class="fbtn" data-filter="conn" onclick="setFilter('conn')">Sessions</button>
+          </div>
+          <span class="counter" id="eventCount">0</span>
+        </div>
+        <div class="feed" id="liveFeed">
+          <div class="feed-empty">
+            <span>No events yet</span>
+            <span class="feed-empty-hint">Simulate an attack to start monitoring</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="col-side">
+
+      <section class="sec sec-sim">
+        <div class="sec-bar">
+          <h2>Attack Simulator</h2>
+        </div>
+        <div class="sim-body">
+          <div class="sim-grid">
+            <button class="sim-btn sim-btn--recon" onclick="launchAttack('scan')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x26A1;</span>
+                <span class="sim-btn-dur">~30s</span>
+              </div>
+              <strong class="sim-btn-title">Port Scan</strong>
+              <span class="sim-btn-tool">nmap -sV -sC</span>
+            </button>
+            <button class="sim-btn sim-btn--exploit" onclick="launchAttack('infiltration')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F511;</span>
+                <span class="sim-btn-dur">~20s</span>
+              </div>
+              <strong class="sim-btn-title">Infiltration</strong>
+              <span class="sim-btn-tool">sshpass + cmds</span>
+            </button>
+            <button class="sim-btn sim-btn--brute" onclick="launchAttack('bruteforce')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F510;</span>
+                <span class="sim-btn-dur">~2min</span>
+              </div>
+              <strong class="sim-btn-title">Brute Force</strong>
+              <span class="sim-btn-tool">hydra -t 4</span>
+            </button>
+            <button class="sim-btn sim-btn--brute" onclick="launchAttack('credstuffing')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F4CB;</span>
+                <span class="sim-btn-dur">~15min</span>
+              </div>
+              <strong class="sim-btn-title">Cred Stuffing</strong>
+              <span class="sim-btn-tool">hydra 1800+ combos</span>
+            </button>
+            <button class="sim-btn sim-btn--flood" onclick="launchAttack('sshflood')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F300;</span>
+                <span class="sim-btn-dur">~15s</span>
+              </div>
+              <strong class="sim-btn-title">SSH Flood</strong>
+              <span class="sim-btn-tool">netcat x160</span>
+            </button>
+            <button class="sim-btn sim-btn--manual" onclick="launchAttack('manual')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F4BB;</span>
+                <span class="sim-btn-dur">30min</span>
+              </div>
+              <strong class="sim-btn-title">Manual Shell</strong>
+              <span class="sim-btn-tool">interactive</span>
+            </button>
+          </div>
+          <div id="attackersList"></div>
+        </div>
+      </section>
+
+      <section class="sec sec-creds">
+        <div class="sec-bar">
+          <h2>Credentials</h2>
+          <span class="counter" id="credCount">0</span>
+        </div>
+        <div class="cred-body" id="credList">
+          <div class="empty-hint">Credentials appear as attackers authenticate</div>
+        </div>
+      </section>
+
+      <section class="sec sec-sessions">
+        <div class="sec-bar">
+          <h2>Sessions</h2>
+          <span class="counter" id="sessionCount">0</span>
+        </div>
+        <div class="sessions-body" id="sessionsList">
+          <div class="empty-hint">Sessions appear when SSH connections are made</div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
