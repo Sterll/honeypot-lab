@@ -77,6 +77,28 @@ body {
   border-radius: var(--radius-xs);
 }
 
+.hdr-services {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.svc-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+}
+
+.svc-ssh    { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.svc-telnet { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
+.svc-http   { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.svc-ftp    { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.svc-smb    { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+
 .hdr-stats {
   display: flex;
   gap: 2px;
@@ -269,6 +291,87 @@ body {
 .leaflet-popup-content b { color: var(--amber); font-weight: 600; }
 
 /* ═══════════════════════════════════════
+   Narrative (attack summary banner)
+   ═══════════════════════════════════════ */
+
+.sec-narrative {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.narr-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-light);
+}
+
+.narr-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--card);
+}
+
+.narr-item.narr-critical {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, var(--card) 60%);
+  border-left: 3px solid var(--red);
+}
+
+.narr-item.narr-warning {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, var(--card) 60%);
+  border-left: 3px solid var(--amber);
+}
+
+.narr-item.narr-info {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, var(--card) 60%);
+  border-left: 3px solid var(--blue);
+}
+
+.narr-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.narr-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.narr-text strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.narr-text span {
+  font-size: 11px;
+  color: var(--fg-2);
+  line-height: 1.4;
+}
+
+.narr-badge {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fg-3);
+  padding: 3px 8px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════
    Feed
    ═══════════════════════════════════════ */
 
@@ -340,6 +443,11 @@ body {
   transition: background 0.06s;
 }
 
+.ev { border-left: 3px solid transparent; }
+.ev[data-severity="critical"] { border-left-color: var(--red); background: rgba(239, 68, 68, 0.03); }
+.ev[data-severity="warning"]  { border-left-color: var(--amber); }
+.ev[data-severity="info"]     { border-left-color: var(--blue); }
+
 .ev:hover { background: var(--surface); }
 .ev.hidden { display: none; }
 
@@ -405,6 +513,39 @@ body {
   margin-left: auto;
 }
 
+.ev-svc {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.ev-svc--http   { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.ev-svc--ftp    { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.ev-svc--smb    { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+.ev-svc--telnet { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
+
+.ev-http-code {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-3);
+}
+
+.filter-sep {
+  color: var(--fg-4);
+  font-size: 11px;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+}
+
+.fbtn-svc {
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+
 .ev-detail {
   margin-top: 2px;
   color: var(--fg-2);
@@ -435,6 +576,14 @@ body {
 .ev-detail .ev-cmd::before {
   content: '$ ';
   color: var(--fg-4);
+}
+
+.ev-detail .ev-cmd-context {
+  display: block;
+  font-size: 10px;
+  color: var(--fg-3);
+  margin-top: 1px;
+  font-style: italic;
 }
 
 /* ═══════════════════════════════════════
@@ -490,12 +639,20 @@ body {
 .sim-btn--brute   { border-left-color: var(--amber); }
 .sim-btn--flood   { border-left-color: var(--purple); }
 .sim-btn--manual  { border-left-color: var(--fg-4); }
+.sim-btn--web     { border-left-color: #06b6d4; }
+.sim-btn--ftp     { border-left-color: #8b5cf6; }
+.sim-btn--telnet  { border-left-color: #ec4899; }
+.sim-btn--smb     { border-left-color: #f97316; }
 
 .sim-btn--recon:hover   { border-left-color: var(--blue);   background: var(--blue-soft); }
 .sim-btn--exploit:hover { border-left-color: var(--red);    background: var(--red-soft); }
 .sim-btn--brute:hover   { border-left-color: var(--amber);  background: var(--amber-soft); }
 .sim-btn--flood:hover   { border-left-color: var(--purple); background: var(--purple-soft); }
 .sim-btn--manual:hover  { background: var(--surface); }
+.sim-btn--web:hover     { border-left-color: #06b6d4; background: rgba(6, 182, 212, 0.1); }
+.sim-btn--ftp:hover     { border-left-color: #8b5cf6; background: rgba(139, 92, 246, 0.1); }
+.sim-btn--telnet:hover  { border-left-color: #ec4899; background: rgba(236, 72, 153, 0.1); }
+.sim-btn--smb:hover     { border-left-color: #f97316; background: rgba(249, 115, 22, 0.1); }
 
 /* Launching animations per category */
 .sim-btn.launching                 { border-color: var(--amber);  background: var(--amber-soft); }
@@ -588,9 +745,44 @@ body {
 .atk-card-ip   { font-family: var(--mono); font-size: 10px; color: var(--fg-3); }
 
 .atk-card-status {
-  font-size: 10px;
-  color: var(--amber);
+  font-size: 11px;
+  color: var(--fg-2);
   margin-top: 4px;
+  line-height: 1.4;
+}
+
+.atk-detail {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--muted);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+}
+
+.atk-detail-target {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg-3);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.atk-detail-step {
+  font-size: 11px;
+  color: var(--fg-2);
+  padding: 2px 0 2px 12px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.atk-detail-step::before {
+  content: '\203A';
+  position: absolute;
+  left: 2px;
+  color: var(--fg-4);
+  font-weight: 600;
 }
 
 .atk-steps {

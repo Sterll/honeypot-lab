@@ -3,10 +3,12 @@ let ws = null;
 let eventCount = 0;
 let feedCount = 0;
 let currentFilter = "all";
+let currentSvcFilter = null;
 const credentials = new Map();
 const sessions = new Map();
 const attackers = new Map();
 const markers = new Map();
+const narrativeWindow = []; // { event, ts } for last 2 minutes
 
 // ── Map ──
 const map = L.map("map", {
@@ -98,9 +100,10 @@ function handleEvent(event) {
 
   processEventForSession(event);
   addToFeed(event);
+  updateNarrative(event);
 
-  if (event.eventid === "cowrie.login.failed" || event.eventid === "cowrie.login.success") {
-    const key = `${event.username}:${event.password}`;
+  if (event.eventid && event.eventid.includes("login") && event.username) {
+    const key = `${event.username}:${event.password || ""}`;
     credentials.set(key, (credentials.get(key) || 0) + 1);
     renderCredentials();
   }
@@ -119,6 +122,7 @@ function processEventForSession(event) {
     sessions.set(event.session, {
       ip: event.src_ip,
       time: event.timestamp,
+      service: event._service || "ssh",
       loginSuccess: false,
       loginAttempts: [],
       commands: [],
@@ -129,17 +133,19 @@ function processEventForSession(event) {
   }
 
   const s = sessions.get(event.session);
+  if (event._service) s.service = event._service;
 
-  if (event.eventid === "cowrie.login.failed") {
-    s.loginAttempts.push({ user: event.username, pass: event.password, success: false });
-  } else if (event.eventid === "cowrie.login.success") {
-    s.loginAttempts.push({ user: event.username, pass: event.password, success: true });
+  const eid = event.eventid || "";
+  if (eid.includes("login.failed") || eid.includes("login.attempt")) {
+    if (event.username) s.loginAttempts.push({ user: event.username, pass: event.password || "", success: false });
+  } else if (eid.includes("login.success")) {
+    if (event.username) s.loginAttempts.push({ user: event.username, pass: event.password || "", success: true });
     s.loginSuccess = true;
-  } else if (event.eventid === "cowrie.command.input" || event.eventid === "cowrie.command.failed") {
-    s.commands.push(event.input);
-  } else if (event.eventid === "cowrie.client.version") {
+  } else if (eid.includes("command.input") || eid.includes("command.failed")) {
+    if (event.input) s.commands.push(event.input);
+  } else if (eid === "cowrie.client.version") {
     s.clientVersion = event.version;
-  } else if (event.eventid === "cowrie.session.closed") {
+  } else if (eid.includes("session.closed")) {
     s.duration = event.duration;
   }
 
@@ -193,14 +199,16 @@ function addToFeed(event) {
   _prevCount = 1;
   feedCount++;
 
+  const svc = event._service || "ssh";
   const div = document.createElement("div");
   div.className = "ev";
   div.dataset.cat = getEventCategory(event.eventid);
+  div.dataset.svc = svc;
   div.dataset.severity = getEventSeverity(event);
 
-  if (currentFilter !== "all" && div.dataset.cat !== currentFilter) {
-    div.classList.add("hidden");
-  }
+  const catHidden = currentFilter !== "all" && div.dataset.cat !== currentFilter;
+  const svcHidden = currentSvcFilter && div.dataset.svc !== currentSvcFilter;
+  if (catHidden || svcHidden) div.classList.add("hidden");
 
   const time = formatTime(event.timestamp);
   const { tag, tagClass } = getEventTag(event.eventid);
@@ -210,10 +218,13 @@ function addToFeed(event) {
   const showGeo = event._geo && event._geo.city && !isPrivateIp(event.src_ip);
   const geoText = showGeo ? `${event._geo.city}, ${event._geo.country}` : "";
 
+  const svcBadge = svc !== "ssh" ? `<span class="ev-svc ev-svc--${svc}">${svc.toUpperCase()}</span>` : "";
+
   div.innerHTML = `
     <div class="ev-time">${time}</div>
     <div class="ev-body">
       <div class="ev-head">
+        ${svcBadge}
         <span class="ev-tag ${tagClass}">${tag}</span>
         ${event.src_ip ? `<span class="ev-ip">${esc(event.src_ip)}</span>` : ""}
         ${geoText ? `<span class="ev-geo">${esc(geoText)}</span>` : ""}
@@ -233,76 +244,221 @@ function addToFeed(event) {
 }
 
 function getEventCategory(eventid) {
+  if (!eventid) return "conn";
   if (eventid.includes("login")) return "auth";
-  if (eventid.includes("command")) return "cmd";
-  if (eventid.includes("download")) return "cmd";
-  if (eventid.includes("session") || eventid.includes("client")) return "conn";
+  if (eventid.includes("command") || eventid.includes("probe")) return "cmd";
+  if (eventid.includes("download") || eventid.includes("file")) return "cmd";
+  if (eventid.includes("xmlrpc")) return "cmd";
+  if (eventid.includes("session") || eventid.includes("client") || eventid.includes("negotiate")) return "conn";
+  if (eventid.includes("request") || eventid.includes("share")) return "cmd";
   return "conn";
 }
 
 function getEventSeverity(event) {
-  if (event.eventid === "cowrie.login.success") return "critical";
-  if (event.eventid === "cowrie.session.file_download") return "critical";
-  if (event.eventid === "cowrie.login.failed") return "warning";
-  if (event.eventid === "cowrie.command.input") return "info";
-  if (event.eventid === "cowrie.session.connect") return "info";
+  const eid = event.eventid || "";
+  if (eid.includes("login.success")) return "critical";
+  if (eid.includes("file_download") || eid.includes("file.download")) return "critical";
+  if (eid.includes("login.failed") || eid.includes("login.attempt")) return "warning";
+  if (eid.includes("probe")) return "warning";
+  if (eid.includes("command") || eid.includes("request")) return "info";
+  if (eid.includes("session.connect")) return "info";
   return "low";
 }
 
 function getEventTag(eventid) {
   const tags = {
-    "cowrie.login.failed":         { tag: "AUTH FAIL", tagClass: "auth-fail" },
-    "cowrie.login.success":        { tag: "AUTH OK",   tagClass: "auth-ok" },
-    "cowrie.command.input":        { tag: "COMMAND",   tagClass: "cmd" },
-    "cowrie.command.failed":       { tag: "CMD FAIL",  tagClass: "cmd" },
-    "cowrie.session.connect":      { tag: "CONNECT",   tagClass: "connect" },
-    "cowrie.session.closed":       { tag: "CLOSED",    tagClass: "disconnect" },
-    "cowrie.session.file_download":{ tag: "DOWNLOAD",  tagClass: "download" },
-    "cowrie.client.version":       { tag: "CLIENT",    tagClass: "client" },
+    "cowrie.login.failed":         { tag: "Failed Login",     tagClass: "auth-fail" },
+    "cowrie.login.success":        { tag: "Login Success",    tagClass: "auth-ok" },
+    "cowrie.command.input":        { tag: "Command",          tagClass: "cmd" },
+    "cowrie.command.failed":       { tag: "Bad Command",      tagClass: "cmd" },
+    "cowrie.session.connect":      { tag: "Connected",        tagClass: "connect" },
+    "cowrie.session.closed":       { tag: "Disconnected",     tagClass: "disconnect" },
+    "cowrie.session.file_download":{ tag: "File Stolen",      tagClass: "download" },
+    "cowrie.client.version":       { tag: "Fingerprint",      tagClass: "client" },
+    // HTTP
+    "http.login.attempt":          { tag: "Login Attempt",    tagClass: "auth-fail" },
+    "http.request":                { tag: "Web Request",      tagClass: "client" },
+    "http.probe":                  { tag: "Scanning",         tagClass: "cmd" },
+    "http.xmlrpc":                 { tag: "API Attack",       tagClass: "cmd" },
+    // FTP
+    "ftp.login.attempt":           { tag: "Login Attempt",    tagClass: "auth-fail" },
+    "ftp.login.success":           { tag: "Login Success",    tagClass: "auth-ok" },
+    "ftp.login.failed":            { tag: "Failed Login",     tagClass: "auth-fail" },
+    "ftp.session.connect":         { tag: "Connected",        tagClass: "connect" },
+    "ftp.session.closed":          { tag: "Disconnected",     tagClass: "disconnect" },
+    "ftp.file.download":           { tag: "File Stolen",      tagClass: "download" },
+    "ftp.file.upload":             { tag: "File Uploaded",    tagClass: "download" },
+    "ftp.command.input":           { tag: "Command",          tagClass: "cmd" },
+    // SMB
+    "smb.login.attempt":           { tag: "Login Attempt",    tagClass: "auth-fail" },
+    "smb.session.connect":         { tag: "Connected",        tagClass: "connect" },
+    "smb.session.closed":          { tag: "Disconnected",     tagClass: "disconnect" },
+    "smb.negotiate":               { tag: "Handshake",        tagClass: "client" },
+    "smb.share.enum":              { tag: "Share Scan",       tagClass: "cmd" },
+    "smb.share.access":            { tag: "Share Access",     tagClass: "download" },
   };
-  return tags[eventid] || { tag: eventid.split(".").pop().toUpperCase(), tagClass: "client" };
+  return tags[eventid] || { tag: (eventid || "UNKNOWN").split(".").pop().toUpperCase(), tagClass: "client" };
 }
 
+// Context for common probed paths
+const PROBE_CONTEXT = {
+  "/.env": "server configuration secrets",
+  "/wp-config.php": "WordPress database credentials",
+  "/wp-config.php.bak": "WordPress config backup",
+  "/phpmyadmin": "database admin panel (phpMyAdmin)",
+  "/wp-admin": "WordPress admin dashboard",
+  "/.git": "source code repository",
+  "/.git/config": "Git repository config",
+  "/backup": "server backup files",
+  "/wp-content/debug.log": "WordPress error logs",
+  "/xmlrpc.php": "WordPress remote API",
+  "/readme.html": "WordPress version info",
+  "/license.txt": "WordPress version info",
+  "/wp-json": "WordPress REST API",
+  "/wp-cron.php": "WordPress scheduled tasks",
+  "/wp-includes": "WordPress core files",
+};
+
+// Context for common attacker commands
+const CMD_CONTEXT = {
+  "cat /etc/passwd": "reading system user list",
+  "cat /etc/shadow": "stealing password hashes",
+  "uname -a": "identifying the OS version",
+  "id": "checking user privileges",
+  "whoami": "checking current user",
+  "pwd": "checking current directory",
+  "ls": "listing directory contents",
+  "ifconfig": "checking network config",
+  "ip addr": "checking network interfaces",
+  "netstat": "listing open network ports",
+  "ps aux": "listing running processes",
+  "w": "checking who is logged in",
+  "last": "checking login history",
+  "history": "reading command history",
+  "crontab": "checking scheduled tasks",
+};
+
 function formatEventDetail(event) {
-  switch (event.eventid) {
-    case "cowrie.login.failed":
-      return `Tried <code>${esc(event.username)}</code> : <code>${esc(event.password)}</code>`;
-    case "cowrie.login.success":
-      return `Logged in as <code>${esc(event.username)}</code> : <code>${esc(event.password)}</code>`;
-    case "cowrie.command.input":
-    case "cowrie.command.failed":
-      return `<span class="ev-cmd">${esc(event.input)}</span>`;
-    case "cowrie.session.connect":
-      return null; // no extra detail needed, tag + IP is enough
-    case "cowrie.session.closed":
-      return event.duration ? `Session: ${formatDuration(event.duration)}` : null;
-    case "cowrie.session.file_download":
-      return `<code>${esc(event.url)}</code>`;
-    case "cowrie.client.version":
-      return `<code>${esc(event.version)}</code>`;
-    default:
-      return event.message ? esc(event.message) : null;
+  const eid = event.eventid || "";
+
+  // Login events (all protocols)
+  if (eid.includes("login.failed") || eid.includes("login.attempt")) {
+    if (event.username) {
+      const domain = event.domain ? `${esc(event.domain)}\\` : "";
+      return `Tried to log in as <code>${domain}${esc(event.username)}</code> with password <code>${esc(event.password || "(empty)")}</code>`;
+    }
+    return event.message ? esc(event.message) : null;
   }
+  if (eid.includes("login.success")) {
+    if (event.username) return `Successfully logged in as <code>${esc(event.username)}</code> with password <code>${esc(event.password || "")}</code>`;
+    return event.message ? esc(event.message) : null;
+  }
+
+  // Commands - add context for known commands
+  if (eid.includes("command.input") || eid.includes("command.failed")) {
+    if (!event.input) return null;
+    const input = event.input.trim();
+    const cmdBase = input.split(" ")[0].split("/").pop();
+    let context = CMD_CONTEXT[input];
+    if (!context) {
+      for (const [pattern, desc] of Object.entries(CMD_CONTEXT)) {
+        if (input.startsWith(pattern)) { context = desc; break; }
+      }
+    }
+    if (!context && (input.startsWith("wget ") || input.startsWith("curl "))) context = "downloading a file from the internet";
+    if (!context && input.startsWith("chmod ")) context = "changing file permissions";
+    if (!context && input.startsWith("rm ")) context = "deleting files";
+    if (!context && input.startsWith("cd ")) context = "navigating directories";
+    const contextHtml = context ? `<span class="ev-cmd-context">${esc(context)}</span>` : "";
+    return `<span class="ev-cmd">${esc(input)}</span>${contextHtml}`;
+  }
+
+  // Session events
+  if (eid.includes("session.connect")) return null;
+  if (eid.includes("session.closed")) return event.duration ? `Session lasted ${formatDuration(event.duration)}` : null;
+
+  // File events
+  if (eid.includes("file_download") || eid.includes("file.download")) {
+    const file = event.url || event.filename || "unknown file";
+    return `Attacker downloaded <code>${esc(file)}</code>`;
+  }
+  if (eid.includes("file.upload")) return event.filename ? `Attacker uploaded <code>${esc(event.filename)}</code>` : null;
+
+  // HTTP probe - explain what they're looking for
+  if (eid === "http.probe") {
+    const path = event.path || "/";
+    const context = PROBE_CONTEXT[path];
+    if (context) return `Looking for <code>${esc(path)}</code> - ${esc(context)}`;
+    return `Probing <code>${esc(path)}</code> for vulnerabilities`;
+  }
+
+  // HTTP request
+  if (eid === "http.request") {
+    const method = event.method || "GET";
+    const path = event.path || "/";
+    if (path === "/" || path === "/index.html") return "Visited the website homepage";
+    if (path.includes("wp-login")) return "Accessed the WordPress login page";
+    return `Requested <code>${esc(method)} ${esc(path)}</code>`;
+  }
+
+  // HTTP XMLRPC
+  if (eid === "http.xmlrpc") {
+    const method = event.post_body && event.post_body.includes("methodName") ? event.post_body.match(/<methodName>(.+?)<\/methodName>/)?.[1] || "?" : "?";
+    return `Exploiting WordPress remote API - method <code>${esc(method)}</code>`;
+  }
+
+  // SMB
+  if (eid === "smb.negotiate") return event.protocol ? `Initiated SMB connection (${esc(event.protocol)})` : "Initiated SMB connection";
+  if (eid === "smb.share.access") return event.share ? `Trying to access shared folder: <code>${esc(event.share)}</code>` : "Accessing network share";
+  if (eid === "smb.share.enum") return event.share ? `Enumerated shared folder: <code>${esc(event.share)}</code>` : "Scanning for shared folders on the network";
+
+  // Client version
+  if (eid === "cowrie.client.version") return event.version ? `Attacker tool: <code>${esc(event.version)}</code>` : null;
+
+  return event.message ? esc(event.message) : null;
 }
 
 function setFilter(filter) {
   currentFilter = filter;
-  document.querySelectorAll(".fbtn").forEach(btn => {
+  currentSvcFilter = null;
+  document.querySelectorAll(".fbtn:not(.fbtn-svc)").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.filter === filter);
   });
+  document.querySelectorAll(".fbtn-svc").forEach(btn => btn.classList.remove("active"));
+  applyFilters();
+}
+
+function setSvcFilter(svc) {
+  if (currentSvcFilter === svc) {
+    currentSvcFilter = null;
+  } else {
+    currentSvcFilter = svc;
+  }
+  document.querySelectorAll(".fbtn-svc").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.svc === currentSvcFilter);
+  });
+  applyFilters();
+}
+
+function applyFilters() {
   document.querySelectorAll(".ev").forEach(ev => {
-    ev.classList.toggle("hidden", filter !== "all" && ev.dataset.cat !== filter);
+    const catOk = currentFilter === "all" || ev.dataset.cat === currentFilter;
+    const svcOk = !currentSvcFilter || ev.dataset.svc === currentSvcFilter;
+    ev.classList.toggle("hidden", !catOk || !svcOk);
   });
 }
 
 // ── Stats ──
 function updateStats(stats) {
-  document.getElementById("statConnections").textContent = stats.totalConnections;
-  document.getElementById("statUniqueIps").textContent = stats.uniqueIps;
-  document.getElementById("statCredentials").textContent = stats.credentialsCaptured;
-  document.getElementById("statSessions").textContent = stats.sessionsCount;
-  document.getElementById("statCommands").textContent = stats.commandsExecuted;
-  document.getElementById("statDownloads").textContent = stats.filesDownloaded;
+  document.getElementById("statConnections").textContent = stats.totalConnections || 0;
+  document.getElementById("statUniqueIps").textContent = stats.uniqueIps || 0;
+  document.getElementById("statCredentials").textContent = stats.credentialsCaptured || 0;
+  document.getElementById("statSessions").textContent = stats.sessionsCount || 0;
+  document.getElementById("statCommands").textContent = stats.commandsExecuted || 0;
+  document.getElementById("statDownloads").textContent = stats.filesDownloaded || 0;
+  document.getElementById("statHttp").textContent = stats.httpRequests || 0;
+  document.getElementById("statFtp").textContent = stats.ftpSessions || 0;
+  document.getElementById("statSmb").textContent = stats.smbSessions || 0;
 }
 
 // ── Credentials ──
@@ -380,8 +536,11 @@ function renderSessions() {
       timeline += `<div class="sess-tl"><span class="sess-tl-icon info">-</span><span class="sess-tl-text">Disconnected after ${formatDuration(s.duration)}</span></div>`;
     }
 
+    const svcTag = s.service && s.service !== "ssh" ? `<span class="ev-svc ev-svc--${s.service}">${s.service.toUpperCase()}</span>` : "";
+
     return `<div class="sess" onclick="this.classList.toggle('expanded')">
       <div class="sess-top">
+        ${svcTag}
         <span class="sess-ip">${esc(s.ip)}</span>
         <span class="sess-badge ${badgeClass}">${badgeText}</span>
         ${geoText ? `<span class="sess-geo">${esc(geoText)}</span>` : ""}
@@ -415,15 +574,106 @@ function updateAttacker(data) {
   renderAttackers();
 }
 
+// Detailed attack descriptions for each type
+const ATTACK_INFO = {
+  scan: {
+    desc: "Discovers open ports and identifies running services on the target machine",
+    steps: [
+      "Scanning ports 21, 22, 23, 80, 445, 2222, 2223, 8080",
+      "Detecting service versions (nmap -sV)",
+      "Running vulnerability detection scripts (nmap -sC)",
+    ],
+    target: "All services",
+  },
+  bruteforce: {
+    desc: "Tries common username/password combinations to break into SSH",
+    steps: [
+      "Testing 6 usernames (root, admin, user, test, ubuntu, pi)",
+      "Against 10 common passwords each (60 combinations)",
+      "4 parallel threads via hydra",
+    ],
+    target: "SSH (port 2222)",
+  },
+  infiltration: {
+    desc: "Logs into the server and simulates a real attacker stealing data",
+    steps: [
+      "Login as root via SSH with known credentials",
+      "Recon: whoami, uname -a (identify the system)",
+      "Exfiltration: cat /etc/passwd, /etc/shadow (steal accounts)",
+      "Deploy malware: wget backdoor.sh + chmod +x",
+      "Lateral movement: try admin:admin on SSH",
+    ],
+    target: "SSH (port 2222)",
+  },
+  sshflood: {
+    desc: "Floods the SSH port with 160 rapid connections to overwhelm the server",
+    steps: [
+      "Wave 1: 60 simultaneous TCP connections",
+      "Wave 2: 60 more connections after 3s",
+      "Wave 3: 40 final connections",
+    ],
+    target: "SSH (port 2222)",
+  },
+  credstuffing: {
+    desc: "Massive credential stuffing with 1800+ username/password combinations",
+    steps: [
+      "25 common usernames (root, admin, deploy, backup...)",
+      "70+ passwords from leaked databases",
+      "2 parallel threads, 10s timeout per attempt",
+    ],
+    target: "SSH (port 2222)",
+  },
+  webscan: {
+    desc: "Scans the web server for WordPress vulnerabilities and sensitive files",
+    steps: [
+      "Nikto vulnerability scanner against HTTP",
+      "Probing: .env, wp-config.php, phpmyadmin, .git...",
+      "Brute-forcing WordPress login (4 users x 5 passwords)",
+      "Testing XML-RPC API for exploits",
+    ],
+    target: "HTTP/WordPress (port 80)",
+  },
+  ftpbrute: {
+    desc: "Brute-forces FTP credentials then tries to steal files",
+    steps: [
+      "Hydra: 8 usernames x 8 passwords (64 combinations)",
+      "Testing anonymous FTP access",
+      "Browsing server files if login succeeds",
+      "Downloading sensitive files (.env.bak, backup.sql)",
+    ],
+    target: "FTP (port 21)",
+  },
+  telnetbrute: {
+    desc: "Brute-forces Telnet login with common credentials",
+    steps: [
+      "Hydra: 5 usernames x 6 passwords (30 combinations)",
+      "Manual Telnet connection probe via netcat",
+    ],
+    target: "Telnet (port 23)",
+  },
+  smbenum: {
+    desc: "Enumerates Windows network shares and tries to access shared files",
+    steps: [
+      "Null session enumeration (no credentials)",
+      "Testing common creds: admin, administrator, guest",
+      "Accessing DOCUMENTS and BACKUP shares",
+      "Nmap SMB scripts (OS discovery, share enum)",
+    ],
+    target: "SMB (port 445)",
+  },
+  manual: {
+    desc: "Interactive shell with all attack tools available for 30 minutes",
+    steps: [
+      "Tools: nmap, hydra, nikto, netcat, sshpass, curl, smbclient",
+      "Targets: SSH:2222, Telnet:23, HTTP:80, FTP:21, SMB:445",
+    ],
+    target: "All services",
+  },
+};
+
 function getRunningMessage(type) {
-  return {
-    scan: "Scanning ports with nmap...",
-    bruteforce: "Spraying SSH credentials...",
-    manual: "Container idle - 30 min session",
-    infiltration: "Logging in & running commands...",
-    sshflood: "Sending mass TCP connections...",
-    credstuffing: "Exhausting 1800+ credential combos...",
-  }[type] || "Attack in progress";
+  const info = ATTACK_INFO[type];
+  return info ? info.desc : "Attack in progress";
 }
 
 function renderAttackers() {
@@ -436,7 +686,7 @@ function renderAttackers() {
 
   container.innerHTML = [...attackers.values()].map(a => {
     const elapsed = a.createdAt ? timeAgo(a.createdAt) : "";
-    const typeLabel = { scan: "Port Scan", bruteforce: "Brute Force", manual: "Manual Shell", infiltration: "Infiltration", sshflood: "SSH Flood", credstuffing: "Cred Stuffing" }[a.attackType] || a.attackType;
+    const typeLabel = { scan: "Port Scan", bruteforce: "Brute Force", manual: "Manual Shell", infiltration: "Infiltration", sshflood: "SSH Flood", credstuffing: "Cred Stuffing", webscan: "Web Scan", ftpbrute: "FTP Brute", telnetbrute: "Telnet Brute", smbenum: "SMB Enum" }[a.attackType] || a.attackType;
     const statusMsg = {
       creating: "Cloning template & starting container...",
       running: getRunningMessage(a.attackType),
@@ -471,6 +721,14 @@ function renderAttackers() {
       `<div class="atk-step ${s.cls}">${s.text}</div>`
     ).join("");
 
+    const info = ATTACK_INFO[a.attackType];
+    const stepsDetail = info && (a.status === "running" || a.status === "creating")
+      ? `<div class="atk-detail">
+          <div class="atk-detail-target">Target: ${esc(info.target)}</div>
+          ${info.steps.map(s => `<div class="atk-detail-step">${esc(s)}</div>`).join("")}
+        </div>`
+      : "";
+
     return `<div class="atk-card" data-type="${esc(a.attackType)}">
       <div class="atk-card-head">
         <span class="atk-dot ${a.status}"></span>
@@ -483,6 +741,7 @@ function renderAttackers() {
         ${a.ip ? `<span class="atk-card-ip">${a.ip}</span>` : ""}
       </div>
       <div class="atk-card-status">${statusMsg}</div>
+      ${stepsDetail}
       <div class="atk-steps">${stepsHtml}</div>
     </div>`;
   }).join("");
@@ -670,6 +929,7 @@ async function resetAll() {
     sessions.clear();
     markers.forEach(m => map.removeLayer(m.marker));
     markers.clear();
+    narrativeWindow.length = 0;
 
     // Reset UI
     document.getElementById("liveFeed").innerHTML = `
@@ -684,9 +944,11 @@ async function resetAll() {
     document.getElementById("sessionCount").textContent = "0";
     document.getElementById("geoCount").textContent = "0 sources";
     document.getElementById("lastEventTime").textContent = "--";
+    document.getElementById("narrativeSection").style.display = "none";
+    document.getElementById("narrativeContent").innerHTML = "";
 
     // Zero all stat cards
-    updateStats({ totalConnections: 0, uniqueIps: 0, credentialsCaptured: 0, sessionsCount: 0, commandsExecuted: 0, filesDownloaded: 0 });
+    updateStats({ totalConnections: 0, uniqueIps: 0, credentialsCaptured: 0, sessionsCount: 0, commandsExecuted: 0, filesDownloaded: 0, httpRequests: 0, ftpSessions: 0, smbSessions: 0 });
   } catch (err) {
     alert("Reset failed: " + err.message);
   } finally {
@@ -695,6 +957,138 @@ async function resetAll() {
     btn.disabled = false;
   }
 }
+
+// ── Narrative Engine ──
+// Tracks recent events and displays human-readable attack summaries
+
+const NARRATIVE_TTL = 120000; // 2 minute window
+
+function updateNarrative(event) {
+  const now = Date.now();
+  narrativeWindow.push({ event, ts: now });
+  while (narrativeWindow.length > 0 && now - narrativeWindow[0].ts > NARRATIVE_TTL) {
+    narrativeWindow.shift();
+  }
+  renderNarrative();
+}
+
+function renderNarrative() {
+  const section = document.getElementById("narrativeSection");
+  const content = document.getElementById("narrativeContent");
+  if (narrativeWindow.length < 3) { section.style.display = "none"; return; }
+
+  const patterns = detectNarrativePatterns();
+  if (patterns.length === 0) { section.style.display = "none"; return; }
+
+  section.style.display = "";
+  content.innerHTML = patterns.map(p => `
+    <div class="narr-item narr-${p.severity}">
+      <span class="narr-icon">${p.icon}</span>
+      <div class="narr-text">
+        <strong>${esc(p.title)}</strong>
+        <span>${esc(p.description)}</span>
+      </div>
+      <span class="narr-badge">${p.count} events</span>
+    </div>
+  `).join("");
+}
+
+function detectNarrativePatterns() {
+  const patterns = [];
+  const byIp = new Map();
+
+  for (const { event } of narrativeWindow) {
+    const ip = event.src_ip || "unknown";
+    if (!byIp.has(ip)) byIp.set(ip, []);
+    byIp.get(ip).push(event);
+  }
+
+  for (const [ip, events] of byIp) {
+    const loginAttempts = events.filter(e => e.eventid && (e.eventid.includes("login.failed") || e.eventid.includes("login.attempt")));
+    const loginSuccess = events.filter(e => e.eventid && e.eventid.includes("login.success"));
+    const commands = events.filter(e => e.eventid && e.eventid.includes("command.input"));
+    const probes = events.filter(e => e.eventid === "http.probe");
+    const connections = events.filter(e => e.eventid && e.eventid.includes("session.connect"));
+
+    const geoEvt = events.find(e => e._geo && e._geo.city && !isPrivateIp(e.src_ip));
+    const location = geoEvt ? `${geoEvt._geo.city}, ${geoEvt._geo.country}` : "";
+    const from = location ? ` from ${location}` : "";
+    const svc = events[0]?._service || "ssh";
+    const svcLabel = { ssh: "SSH server", telnet: "Telnet server", http: "the web server (WordPress)", ftp: "the FTP server", smb: "network file shares (SMB)" }[svc] || svc;
+
+    // Intrusion: login + commands = highest priority
+    if (loginSuccess.length > 0 && commands.length > 0) {
+      patterns.push({
+        severity: "critical",
+        icon: "\u{1F6A8}",
+        title: "Intrusion in progress",
+        description: `An attacker${from} broke into ${svcLabel} and is running commands on the system`,
+        count: commands.length,
+      });
+      continue;
+    }
+
+    // Login success without commands yet
+    if (loginSuccess.length > 0 && commands.length === 0) {
+      patterns.push({
+        severity: "critical",
+        icon: "\u{26A0}\u{FE0F}",
+        title: "Attacker logged in",
+        description: `Someone${from} successfully authenticated to ${svcLabel}`,
+        count: loginSuccess.length,
+      });
+      continue;
+    }
+
+    // Brute force: 5+ login attempts
+    if (loginAttempts.length >= 5) {
+      patterns.push({
+        severity: "warning",
+        icon: "\u{1F510}",
+        title: "Brute force attack",
+        description: `${loginAttempts.length} password guesses targeting ${svcLabel}${from}`,
+        count: loginAttempts.length,
+      });
+    }
+
+    // Vulnerability scanning: 3+ probes
+    if (probes.length >= 3) {
+      patterns.push({
+        severity: "info",
+        icon: "\u{1F50D}",
+        title: "Vulnerability scanning",
+        description: `Attacker${from} is searching for sensitive files and known exploits on the web server`,
+        count: probes.length,
+      });
+    }
+
+    // Connection flood: 10+ connections, not brute force
+    if (connections.length >= 10 && loginAttempts.length < 5) {
+      patterns.push({
+        severity: "warning",
+        icon: "\u{1F300}",
+        title: "Connection flood",
+        description: `${connections.length} rapid connections${from} - possible denial of service`,
+        count: connections.length,
+      });
+    }
+  }
+
+  const sevOrder = { critical: 0, warning: 1, info: 2 };
+  patterns.sort((a, b) => (sevOrder[a.severity] || 3) - (sevOrder[b.severity] || 3));
+  return patterns.slice(0, 3);
+}
+
+// Refresh narrative every 10s to expire old patterns
+setInterval(() => {
+  if (narrativeWindow.length > 0) {
+    const now = Date.now();
+    while (narrativeWindow.length > 0 && now - narrativeWindow[0].ts > NARRATIVE_TTL) {
+      narrativeWindow.shift();
+    }
+    renderNarrative();
+  }
+}, 10000);
 
 // ── Init ──
 loadInitialData().then(() => connectWs());

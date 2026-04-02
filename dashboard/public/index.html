@@ -14,7 +14,14 @@
 
   <header class="hdr">
     <h1 class="logo">honeypot</h1>
-    <span class="hdr-target">10.30.30.10:2222</span>
+    <span class="hdr-target">10.30.30.10</span>
+    <div class="hdr-services">
+      <span class="svc-badge svc-ssh" title="SSH :2222">SSH</span>
+      <span class="svc-badge svc-telnet" title="Telnet :23">Telnet</span>
+      <span class="svc-badge svc-http" title="HTTP :80">HTTP</span>
+      <span class="svc-badge svc-ftp" title="FTP :21">FTP</span>
+      <span class="svc-badge svc-smb" title="SMB :445">SMB</span>
+    </div>
 
     <nav class="hdr-stats">
       <span class="hstat"><strong id="statConnections">0</strong> conn</span>
@@ -23,6 +30,9 @@
       <span class="hstat"><strong id="statSessions">0</strong> sess</span>
       <span class="hstat"><strong id="statCommands">0</strong> cmds</span>
       <span class="hstat"><strong id="statDownloads">0</strong> files</span>
+      <span class="hstat"><strong id="statHttp">0</strong> HTTP</span>
+      <span class="hstat"><strong id="statFtp">0</strong> FTP</span>
+      <span class="hstat"><strong id="statSmb">0</strong> SMB</span>
     </nav>
 
     <div class="hdr-right">
@@ -46,6 +56,10 @@
         <div id="map"></div>
       </section>
 
+      <section class="sec sec-narrative" id="narrativeSection" style="display:none">
+        <div class="narr-content" id="narrativeContent"></div>
+      </section>
+
       <section class="sec sec-feed">
         <div class="sec-bar">
           <h2>Live Activity</h2>
@@ -54,6 +68,12 @@
             <button class="fbtn" data-filter="auth" onclick="setFilter('auth')">Auth</button>
             <button class="fbtn" data-filter="cmd" onclick="setFilter('cmd')">Commands</button>
             <button class="fbtn" data-filter="conn" onclick="setFilter('conn')">Sessions</button>
+            <span class="filter-sep">|</span>
+            <button class="fbtn fbtn-svc" data-svc="ssh" onclick="setSvcFilter('ssh')">SSH</button>
+            <button class="fbtn fbtn-svc" data-svc="telnet" onclick="setSvcFilter('telnet')">Telnet</button>
+            <button class="fbtn fbtn-svc" data-svc="http" onclick="setSvcFilter('http')">HTTP</button>
+            <button class="fbtn fbtn-svc" data-svc="ftp" onclick="setSvcFilter('ftp')">FTP</button>
+            <button class="fbtn fbtn-svc" data-svc="smb" onclick="setSvcFilter('smb')">SMB</button>
           </div>
           <span class="counter" id="eventCount">0</span>
         </div>
@@ -122,6 +142,38 @@
               </div>
               <strong class="sim-btn-title">Manual Shell</strong>
               <span class="sim-btn-tool">interactive</span>
+            </button>
+            <button class="sim-btn sim-btn--web" onclick="launchAttack('webscan')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F310;</span>
+                <span class="sim-btn-dur">~2min</span>
+              </div>
+              <strong class="sim-btn-title">Web Scan</strong>
+              <span class="sim-btn-tool">nikto + wp-login</span>
+            </button>
+            <button class="sim-btn sim-btn--ftp" onclick="launchAttack('ftpbrute')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F4C1;</span>
+                <span class="sim-btn-dur">~1min</span>
+              </div>
+              <strong class="sim-btn-title">FTP Brute</strong>
+              <span class="sim-btn-tool">hydra + curl</span>
+            </button>
+            <button class="sim-btn sim-btn--telnet" onclick="launchAttack('telnetbrute')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F4DF;</span>
+                <span class="sim-btn-dur">~1min</span>
+              </div>
+              <strong class="sim-btn-title">Telnet Brute</strong>
+              <span class="sim-btn-tool">hydra + netcat</span>
+            </button>
+            <button class="sim-btn sim-btn--smb" onclick="launchAttack('smbenum')">
+              <div class="sim-btn-top">
+                <span class="sim-btn-icon">&#x1F5C4;</span>
+                <span class="sim-btn-dur">~1min</span>
+              </div>
+              <strong class="sim-btn-title">SMB Enum</strong>
+              <span class="sim-btn-tool">smbclient + nmap</span>
             </button>
           </div>
           <div id="attackersList"></div>
