@@ -13,29 +13,35 @@
 <body>
 
   <header class="hdr">
-    <h1 class="logo">honeypot</h1>
-    <span class="hdr-target">10.30.30.10</span>
-    <div class="hdr-services">
-      <span class="svc-badge svc-ssh" title="SSH :2222">SSH</span>
-      <span class="svc-badge svc-telnet" title="Telnet :23">Telnet</span>
-      <span class="svc-badge svc-http" title="HTTP :80">HTTP</span>
-      <span class="svc-badge svc-ftp" title="FTP :21">FTP</span>
-      <span class="svc-badge svc-smb" title="SMB :445">SMB</span>
+    <div class="hdr-left">
+      <h1 class="logo">honeypot</h1>
+      <span class="hdr-target">10.30.30.10</span>
+      <div class="hdr-services">
+        <span class="svc-badge svc-ssh" title="SSH :22">SSH</span>
+        <span class="svc-badge svc-telnet" title="Telnet :23">Telnet</span>
+        <span class="svc-badge svc-http" title="HTTP :80">HTTP</span>
+        <span class="svc-badge svc-ftp" title="FTP :21">FTP</span>
+        <span class="svc-badge svc-smb" title="SMB :445">SMB</span>
+      </div>
     </div>
 
-    <nav class="hdr-stats">
-      <span class="hstat"><strong id="statConnections">0</strong> conn</span>
-      <span class="hstat"><strong id="statUniqueIps">0</strong> IPs</span>
-      <span class="hstat"><strong id="statCredentials">0</strong> creds</span>
-      <span class="hstat"><strong id="statSessions">0</strong> sess</span>
-      <span class="hstat"><strong id="statCommands">0</strong> cmds</span>
-      <span class="hstat"><strong id="statDownloads">0</strong> files</span>
-      <span class="hstat"><strong id="statHttp">0</strong> HTTP</span>
-      <span class="hstat"><strong id="statFtp">0</strong> FTP</span>
-      <span class="hstat"><strong id="statSmb">0</strong> SMB</span>
+    <nav class="hdr-nav">
+      <button class="nav-tab active" data-view="monitor" onclick="switchView('monitor')">Monitor</button>
+      <button class="nav-tab" data-view="attacker" onclick="switchView('attacker')">Attacker</button>
     </nav>
 
     <div class="hdr-right">
+      <nav class="hdr-stats">
+        <span class="hstat"><strong id="statConnections">0</strong> conn</span>
+        <span class="hstat"><strong id="statUniqueIps">0</strong> IPs</span>
+        <span class="hstat"><strong id="statCredentials">0</strong> creds</span>
+        <span class="hstat"><strong id="statSessions">0</strong> sess</span>
+        <span class="hstat"><strong id="statCommands">0</strong> cmds</span>
+        <span class="hstat"><strong id="statDownloads">0</strong> files</span>
+        <span class="hstat"><strong id="statHttp">0</strong> HTTP</span>
+        <span class="hstat"><strong id="statFtp">0</strong> FTP</span>
+        <span class="hstat"><strong id="statSmb">0</strong> SMB</span>
+      </nav>
       <span class="hdr-last">Last: <span id="lastEventTime">--</span></span>
       <button class="reset-btn" onclick="resetAll()">Clear data</button>
       <div class="ws-status" id="wsStatus">
@@ -45,56 +51,85 @@
     </div>
   </header>
 
-  <main class="layout">
-    <div class="col-main">
+  <!-- ====== VIEW: Monitor ====== -->
+  <main class="view view-monitor active" id="viewMonitor">
+    <div class="layout">
+      <div class="col-main">
 
-      <section class="sec sec-map">
-        <div class="sec-bar">
-          <h2>Attack Origins</h2>
-          <span class="counter" id="geoCount">0 sources</span>
-        </div>
-        <div id="map"></div>
-      </section>
-
-      <section class="sec sec-narrative" id="narrativeSection" style="display:none">
-        <div class="narr-content" id="narrativeContent"></div>
-      </section>
-
-      <section class="sec sec-feed">
-        <div class="sec-bar">
-          <h2>Live Activity</h2>
-          <div class="feed-filters">
-            <button class="fbtn active" data-filter="all" onclick="setFilter('all')">All</button>
-            <button class="fbtn" data-filter="auth" onclick="setFilter('auth')">Auth</button>
-            <button class="fbtn" data-filter="cmd" onclick="setFilter('cmd')">Commands</button>
-            <button class="fbtn" data-filter="conn" onclick="setFilter('conn')">Sessions</button>
-            <span class="filter-sep">|</span>
-            <button class="fbtn fbtn-svc" data-svc="ssh" onclick="setSvcFilter('ssh')">SSH</button>
-            <button class="fbtn fbtn-svc" data-svc="telnet" onclick="setSvcFilter('telnet')">Telnet</button>
-            <button class="fbtn fbtn-svc" data-svc="http" onclick="setSvcFilter('http')">HTTP</button>
-            <button class="fbtn fbtn-svc" data-svc="ftp" onclick="setSvcFilter('ftp')">FTP</button>
-            <button class="fbtn fbtn-svc" data-svc="smb" onclick="setSvcFilter('smb')">SMB</button>
+        <section class="sec sec-map">
+          <div class="sec-bar">
+            <h2>Attack Origins</h2>
+            <span class="counter" id="geoCount">0 sources</span>
           </div>
-          <span class="counter" id="eventCount">0</span>
-        </div>
-        <div class="feed" id="liveFeed">
-          <div class="feed-empty">
-            <span>No events yet</span>
-            <span class="feed-empty-hint">Simulate an attack to start monitoring</span>
-          </div>
-        </div>
-      </section>
+          <div id="map"></div>
+        </section>
 
+        <section class="sec sec-narrative" id="narrativeSection" style="display:none">
+          <div class="narr-content" id="narrativeContent"></div>
+        </section>
+
+        <section class="sec sec-feed">
+          <div class="sec-bar">
+            <h2>Live Activity</h2>
+            <div class="feed-filters">
+              <button class="fbtn active" data-filter="all" onclick="setFilter('all')">All</button>
+              <button class="fbtn" data-filter="auth" onclick="setFilter('auth')">Auth</button>
+              <button class="fbtn" data-filter="cmd" onclick="setFilter('cmd')">Commands</button>
+              <button class="fbtn" data-filter="conn" onclick="setFilter('conn')">Sessions</button>
+              <span class="filter-sep">|</span>
+              <button class="fbtn fbtn-svc" data-svc="ssh" onclick="setSvcFilter('ssh')">SSH</button>
+              <button class="fbtn fbtn-svc" data-svc="telnet" onclick="setSvcFilter('telnet')">Telnet</button>
+              <button class="fbtn fbtn-svc" data-svc="http" onclick="setSvcFilter('http')">HTTP</button>
+              <button class="fbtn fbtn-svc" data-svc="ftp" onclick="setSvcFilter('ftp')">FTP</button>
+              <button class="fbtn fbtn-svc" data-svc="smb" onclick="setSvcFilter('smb')">SMB</button>
+            </div>
+            <span class="counter" id="eventCount">0</span>
+          </div>
+          <div class="feed" id="liveFeed">
+            <div class="feed-empty">
+              <span>No events yet</span>
+              <span class="feed-empty-hint">Simulate an attack to start monitoring</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <div class="col-side">
+        <section class="sec sec-creds">
+          <div class="sec-bar">
+            <h2>Credentials</h2>
+            <span class="counter" id="credCount">0</span>
+          </div>
+          <div class="cred-body" id="credList">
+            <div class="empty-hint">Credentials appear as attackers authenticate</div>
+          </div>
+        </section>
+
+        <section class="sec sec-sessions">
+          <div class="sec-bar">
+            <h2>Sessions</h2>
+            <span class="counter" id="sessionCount">0</span>
+          </div>
+          <div class="sessions-body" id="sessionsList">
+            <div class="empty-hint">Sessions appear when SSH connections are made</div>
+          </div>
+        </section>
+      </div>
     </div>
+  </main>
 
-    <div class="col-side">
+  <!-- ====== VIEW: Attacker ====== -->
+  <main class="view view-attacker" id="viewAttacker">
+    <div class="atk-layout">
 
       <section class="sec sec-sim">
         <div class="sec-bar">
           <h2>Attack Simulator</h2>
+          <span class="sim-hint">Launch attacks against the honeypot</span>
         </div>
         <div class="sim-body">
-          <div class="sim-grid">
+          <div class="sim-grid sim-grid--wide">
             <button class="sim-btn sim-btn--recon" onclick="launchAttack('scan')">
               <div class="sim-btn-top">
                 <span class="sim-btn-icon">&#x26A1;</span>
@@ -176,27 +211,16 @@
               <span class="sim-btn-tool">smbclient + nmap</span>
             </button>
           </div>
-          <div id="attackersList"></div>
         </div>
       </section>
 
-      <section class="sec sec-creds">
+      <section class="sec sec-attackers">
         <div class="sec-bar">
-          <h2>Credentials</h2>
-          <span class="counter" id="credCount">0</span>
+          <h2>Active Attackers</h2>
+          <span class="counter" id="attackerCount">0</span>
         </div>
-        <div class="cred-body" id="credList">
-          <div class="empty-hint">Credentials appear as attackers authenticate</div>
-        </div>
-      </section>
-
-      <section class="sec sec-sessions">
-        <div class="sec-bar">
-          <h2>Sessions</h2>
-          <span class="counter" id="sessionCount">0</span>
-        </div>
-        <div class="sessions-body" id="sessionsList">
-          <div class="empty-hint">Sessions appear when SSH connections are made</div>
+        <div class="attackers-body" id="attackersList">
+          <div class="empty-hint">No active attackers - launch an attack above</div>
         </div>
       </section>
 
@@ -214,7 +238,7 @@
       <div class="term-output" id="termOutput">
         <div class="term-welcome">
           <span class="term-welcome-line">Connected to attacker container</span>
-          <span class="term-welcome-line">Target: 10.30.30.10 (SSH:2222 HTTP:80 FTP:21 SMB:445 Telnet:23)</span>
+          <span class="term-welcome-line">Target: 10.30.30.10 (SSH:22 HTTP:80 FTP:21 SMB:445 Telnet:23)</span>
           <span class="term-welcome-line">Tools: nmap, hydra, nikto, curl, smbclient, sshpass, netcat</span>
           <span class="term-welcome-line term-hint">All commands run inside the attacker container. The honeypot captures everything.</span>
         </div>

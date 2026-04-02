@@ -4,6 +4,7 @@ let eventCount = 0;
 let feedCount = 0;
 let currentFilter = "all";
 let currentSvcFilter = null;
+let currentView = "monitor";
 const credentials = new Map();
 const sessions = new Map();
 const attackers = new Map();
@@ -679,9 +680,11 @@ function getRunningMessage(type) {
 
 function renderAttackers() {
   const container = document.getElementById("attackersList");
+  const countEl = document.getElementById("attackerCount");
+  if (countEl) countEl.textContent = attackers.size;
 
   if (attackers.size === 0) {
-    container.innerHTML = "";
+    container.innerHTML = '<div class="empty-hint">No active attackers</div>';
     return;
   }
 
@@ -1229,6 +1232,19 @@ function handleTerminalOutput(data) {
 document.getElementById("termOverlay")?.addEventListener("click", (e) => {
   if (e.target === e.currentTarget) closeTerminal();
 });
+
+// ── View Switching ──
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById(view === "monitor" ? "viewMonitor" : "viewAttacker").classList.add("active");
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
+
+  // Leaflet needs a nudge after being hidden
+  if (view === "monitor") {
+    setTimeout(() => map.invalidateSize(), 100);
+  }
+}
 
 // ── Init ──
 loadInitialData().then(() => connectWs());
