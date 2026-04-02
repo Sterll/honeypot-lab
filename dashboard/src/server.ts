@@ -4,10 +4,10 @@ import fastifyWebsocket from "@fastify/websocket";
 import path from "path";
 import type { WebSocket } from "ws";
 import { initDatabase, insertEvent, getEvents, getStats, getCredentials, getSessions, getSessionCommands, getGeoData, resetData } from "./db";
-import { CowrieWatcher } from "./cowrie-watcher";
+import { LogWatcher } from "./log-watcher";
 import { lookupGeoIp } from "./geoip";
 import { spawnAttacker, destroyAttacker, getActiveAttackers, setAttackerUpdateCallback } from "./proxmox";
-import type { CowrieEvent, WsMessage, AttackType } from "./types";
+import type { HoneypotEvent, WsMessage, AttackType } from "./types";
 
 // Disable TLS verification for Proxmox self-signed certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -33,12 +33,12 @@ function broadcast(msg: WsMessage): void {
 
 // Broadcast attacker status changes (finished, etc.)
 setAttackerUpdateCallback((attacker) => {
-  broadcast({ type: "attacker_update", data: attacker as unknown as CowrieEvent });
+  broadcast({ type: "attacker_update", data: attacker as unknown as HoneypotEvent });
 });
 
-// Cowrie watcher
-const watcher = new CowrieWatcher();
-watcher.on("event", async (event: CowrieEvent) => {
+// Log watcher (all honeypot services)
+const watcher = new LogWatcher();
+watcher.on("event", async (event: HoneypotEvent) => {
   // Store in DB
   insertEvent(event);
 
@@ -46,10 +46,10 @@ watcher.on("event", async (event: CowrieEvent) => {
   const geo = await lookupGeoIp(event.src_ip);
 
   // Broadcast to all WS clients
-  broadcast({ type: "event", data: { ...event, _geo: geo } as unknown as CowrieEvent });
+  broadcast({ type: "event", data: { ...event, _geo: geo } as unknown as HoneypotEvent });
 
   // Periodically send stats update
-  broadcast({ type: "stats", data: getStats() as unknown as CowrieEvent });
+  broadcast({ type: "stats", data: getStats() as unknown as HoneypotEvent });
 });
 
 // Fastify server
@@ -115,18 +115,18 @@ app.get("/api/attackers", async () => {
 
 app.post("/api/attack/:type", async (req) => {
   const { type } = req.params as { type: string };
-  const validTypes: AttackType[] = ["scan", "bruteforce", "manual", "infiltration", "sshflood", "credstuffing"];
+  const validTypes: AttackType[] = ["scan", "bruteforce", "manual", "infiltration", "sshflood", "credstuffing", "webscan", "ftpbrute", "telnetbrute", "smbenum"];
   if (!validTypes.includes(type as AttackType)) {
     return { error: "Invalid attack type" };
   }
   const attacker = await spawnAttacker(type as AttackType);
-  broadcast({ type: "attacker_update", data: attacker as unknown as CowrieEvent });
+  broadcast({ type: "attacker_update", data: attacker as unknown as HoneypotEvent });
   return attacker;
 });
 
 app.post("/api/reset", async () => {
   resetData();
-  broadcast({ type: "stats", data: getStats() as unknown as CowrieEvent });
+  broadcast({ type: "stats", data: getStats() as unknown as HoneypotEvent });
   return { ok: true };
 });
 
@@ -135,7 +135,7 @@ app.delete("/api/attack/:vmid", async (req) => {
   await destroyAttacker(parseInt(vmid));
   broadcast({
     type: "attacker_update",
-    data: { vmid: parseInt(vmid), status: "destroying" } as unknown as CowrieEvent,
+    data: { vmid: parseInt(vmid), status: "destroying" } as unknown as HoneypotEvent,
   });
   return { ok: true };
 });
@@ -155,7 +155,7 @@ async function main() {
   console.log(`[server] Dashboard running at http://${HOST}:${PORT}`);
 
   watcher.start();
-  console.log("[server] Cowrie watcher started");
+  console.log("[server] Log watcher started (ssh, telnet, http, ftp, smb)");
 }
 
 main().catch((err) => {

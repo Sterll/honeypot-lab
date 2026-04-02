@@ -1,64 +1,46 @@
-// Cowrie event types
-export interface CowrieBaseEvent {
+// Generic honeypot event (all services use this shape)
+export interface HoneypotEvent {
   eventid: string;
   timestamp: string;
-  sensor: string;
   session: string;
   src_ip: string;
   src_port?: number;
   dst_ip?: string;
   dst_port?: number;
-  message: string;
+  message?: string;
+  sensor?: string;
+  // Auth fields
+  username?: string;
+  password?: string;
+  domain?: string;
+  // SSH/Telnet fields
+  input?: string;
+  duration?: number;
+  protocol?: string;
+  version?: string;
+  hassh?: string;
+  hasshAlgorithms?: string;
+  // File fields
+  url?: string;
+  outfile?: string;
+  shasum?: string;
+  filename?: string;
+  // HTTP fields
+  method?: string;
+  path?: string;
+  user_agent?: string;
+  host?: string;
+  response_code?: number;
+  post_body?: string;
+  // Service tag (added by log-watcher)
+  _service?: ServiceType;
+  _geo?: unknown;
 }
 
-export interface CowrieLoginEvent extends CowrieBaseEvent {
-  eventid: "cowrie.login.failed" | "cowrie.login.success";
-  username: string;
-  password: string;
-}
+// Backward compat alias
+export type CowrieEvent = HoneypotEvent;
 
-export interface CowrieCommandEvent extends CowrieBaseEvent {
-  eventid: "cowrie.command.input" | "cowrie.command.failed";
-  input: string;
-}
-
-export interface CowrieSessionConnect extends CowrieBaseEvent {
-  eventid: "cowrie.session.connect";
-  protocol: string;
-}
-
-export interface CowrieSessionClosed extends CowrieBaseEvent {
-  eventid: "cowrie.session.closed";
-  duration: number;
-}
-
-export interface CowrieFileDownload extends CowrieBaseEvent {
-  eventid: "cowrie.session.file_download";
-  url: string;
-  outfile: string;
-  shasum: string;
-}
-
-export interface CowrieClientVersion extends CowrieBaseEvent {
-  eventid: "cowrie.client.version";
-  version: string;
-}
-
-export interface CowrieClientKex extends CowrieBaseEvent {
-  eventid: "cowrie.client.kex";
-  hassh: string;
-  hasshAlgorithms: string;
-}
-
-export type CowrieEvent =
-  | CowrieLoginEvent
-  | CowrieCommandEvent
-  | CowrieSessionConnect
-  | CowrieSessionClosed
-  | CowrieFileDownload
-  | CowrieClientVersion
-  | CowrieClientKex
-  | CowrieBaseEvent;
+export type ServiceType = "ssh" | "telnet" | "http" | "ftp" | "smb";
 
 // GeoIP
 export interface GeoInfo {
@@ -72,7 +54,7 @@ export interface GeoInfo {
 }
 
 // Proxmox attacker container
-export type AttackType = "scan" | "bruteforce" | "manual" | "infiltration" | "sshflood" | "credstuffing";
+export type AttackType = "scan" | "bruteforce" | "manual" | "infiltration" | "sshflood" | "credstuffing" | "webscan" | "ftpbrute" | "telnetbrute" | "smbenum";
 
 export interface AttackerContainer {
   vmid: number;
@@ -91,6 +73,9 @@ export interface DashboardStats {
   sessionsCount: number;
   commandsExecuted: number;
   filesDownloaded: number;
+  httpRequests: number;
+  ftpSessions: number;
+  smbSessions: number;
 }
 
 // WebSocket message types
