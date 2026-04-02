@@ -63,6 +63,8 @@ export interface AttackerContainer {
   status: "creating" | "running" | "finished" | "destroying";
   createdAt: string;
   ip: string;
+  sshPort?: number;
+  sshPassword?: string;
 }
 
 // Dashboard stats

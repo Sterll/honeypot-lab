@@ -7,6 +7,7 @@ const TEMPLATE_VMID = 903;
 const HONEYPOT_IP = "10.30.30.10";
 const ATTACKER_BASE_IP = 101;
 const STORAGE = "local-lvm";
+const MANUAL_SSH_PASSWORD = "attacker";
 
 const activeAttackers = new Map<number, AttackerContainer>();
 const reservedVmids = new Set<number>();
@@ -61,6 +62,12 @@ const ATTACK_SCRIPTS: Record<string, string> = {
   ].join(" && ").replace(/HONEYPOT_IP/g, HONEYPOT_IP),
 
   manual: [
+    "echo '[*] Setting up SSH server...'",
+    `echo "root:${MANUAL_SSH_PASSWORD}" | chpasswd`,
+    "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config",
+    "echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config",
+    "mkdir -p /run/sshd && (kill $(cat /var/run/sshd.pid 2>/dev/null) 2>/dev/null; sleep 0.5; /usr/sbin/sshd || true)",
+    "echo '[*] SSH server started'",
     "echo '[*] Manual attack container ready'",
     "echo '[*] Honeypot at HONEYPOT_IP'",
     "echo '[*]   SSH:    port 2222 (Cowrie)'",
@@ -222,6 +229,11 @@ export async function spawnAttacker(
     attacker.status = "running";
     console.log(`[proxmox] CT ${vmid} is running at ${ip}`);
 
+    // Set SSH info for manual containers (direct access via Tailscale subnet)
+    if (attackType === "manual") {
+      attacker.sshPassword = MANUAL_SSH_PASSWORD;
+    }
+
     // Launch the attack asynchronously
     scheduleAttack(vmid, ATTACK_SCRIPTS[attackType], attackType);
 
@@ -273,7 +285,9 @@ function scheduleAttack(vmid: number, script: string, attackType: string): void 
 
 export async function destroyAttacker(vmid: number): Promise<void> {
   const attacker = activeAttackers.get(vmid);
-  if (attacker) attacker.status = "destroying";
+  if (attacker) {
+    attacker.status = "destroying";
+  }
 
   try {
     console.log(`[proxmox] Destroying CT ${vmid}`);

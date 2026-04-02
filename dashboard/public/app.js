@@ -112,7 +112,7 @@ function handleEvent(event) {
 
   renderSessions();
 
-  if (event._geo && event._geo.lat !== 0 && !isPrivateIp(event.src_ip)) {
+  if (event._geo && event._geo.lat !== 0) {
     addMapMarker(event.src_ip, event._geo);
   }
 }
@@ -151,7 +151,7 @@ function processEventForSession(event) {
     s.duration = event.duration;
   }
 
-  if (event._geo && event._geo.lat !== 0 && !isPrivateIp(event.src_ip)) {
+  if (event._geo && event._geo.lat !== 0) {
     s.geo = event._geo;
   }
 }
@@ -216,8 +216,8 @@ function addToFeed(event) {
   const { tag, tagClass } = getEventTag(event.eventid);
   const detail = formatEventDetail(event);
 
-  // Only show geo for public IPs, skip "LAN, Local" noise
-  const showGeo = event._geo && event._geo.city && !isPrivateIp(event.src_ip);
+  // Show geo if available (skip LAN/Local placeholder)
+  const showGeo = event._geo && event._geo.city && event._geo.city !== "LAN";
   const geoText = showGeo ? `${event._geo.city}, ${event._geo.country}` : "";
 
   const svcBadge = svc !== "ssh" ? `<span class="ev-svc ev-svc--${svc}">${svc.toUpperCase()}</span>` : "";
@@ -512,8 +512,7 @@ function renderSessions() {
     const time = formatTime(s.time);
     const durationText = s.duration ? formatDuration(s.duration) : "";
 
-    // Only show geo for public IPs
-    const geoText = (s.geo && !isPrivateIp(s.ip))
+    const geoText = (s.geo && s.geo.city && s.geo.city !== "LAN")
       ? `${s.geo.city || ""}, ${s.geo.country || ""}`.replace(/^, /, "")
       : "";
 
@@ -737,6 +736,20 @@ function renderAttackers() {
       ? `<button class="atk-term-btn" onclick="event.stopPropagation(); openTerminal(${a.vmid})">Open Shell</button>`
       : "";
 
+    // SSH connection info for manual containers
+    let sshInfo = "";
+    if (a.attackType === "manual" && a.ip && a.status === "running") {
+      const sshCmd = `ssh root@${a.ip}`;
+      sshInfo = `<div class="atk-ssh-info">
+        <div class="atk-ssh-label">SSH Access</div>
+        <div class="atk-ssh-cmd" onclick="event.stopPropagation(); navigator.clipboard.writeText('${sshCmd}'); this.classList.add('copied'); setTimeout(() => this.classList.remove('copied'), 1500);">
+          <code>${esc(sshCmd)}</code>
+          <span class="atk-ssh-copy">copy</span>
+        </div>
+        <div class="atk-ssh-pass">Password: <code>${esc(a.sshPassword || "attacker")}</code></div>
+      </div>`;
+    }
+
     return `<div class="atk-card" data-type="${esc(a.attackType)}">
       <div class="atk-card-head">
         <span class="atk-dot ${a.status}"></span>
@@ -750,6 +763,7 @@ function renderAttackers() {
       </div>
       <div class="atk-card-status">${statusMsg}</div>
       ${termBtn}
+      ${sshInfo}
       ${stepsDetail}
       <div class="atk-steps">${stepsHtml}</div>
     </div>`;
@@ -814,7 +828,7 @@ async function destroyAttacker(vmid) {
 
 // ── Map ──
 function addMapMarker(ip, geo) {
-  if (isPrivateIp(ip)) return;
+  if (!geo || !geo.lat || geo.city === "LAN") return;
 
   if (markers.has(ip)) {
     const m = markers.get(ip);
@@ -892,7 +906,7 @@ async function loadInitialData() {
     // Geo markers
     const geoData = await fetch("/api/geo").then(r => r.json());
     geoData.forEach(g => {
-      if (g.lat && g.lon && !isPrivateIp(g.ip)) {
+      if (g.lat && g.lon && g.city !== "LAN") {
         addMapMarker(g.ip, { lat: g.lat, lon: g.lon, country: g.country, city: g.city, isp: "" });
         const m = markers.get(g.ip);
         if (m) m.count = g.count;
@@ -1019,7 +1033,7 @@ function detectNarrativePatterns() {
     const probes = events.filter(e => e.eventid === "http.probe");
     const connections = events.filter(e => e.eventid && e.eventid.includes("session.connect"));
 
-    const geoEvt = events.find(e => e._geo && e._geo.city && !isPrivateIp(e.src_ip));
+    const geoEvt = events.find(e => e._geo && e._geo.city && e._geo.city !== "LAN");
     const location = geoEvt ? `${geoEvt._geo.city}, ${geoEvt._geo.country}` : "";
     const from = location ? ` from ${location}` : "";
     const svc = events[0]?._service || "ssh";
