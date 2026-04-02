@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Honeypot Lab - Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #09090b;
+  --bg-2: #111113;
+  --surface: #18181b;
+  --border: #27272a;
+  --fg: #fafafa;
+  --fg-2: #a1a1aa;
+  --fg-3: #71717a;
+  --red: #ef4444;
+  --green: #22c55e;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --purple: #a855f7;
+  --cyan: #06b6d4;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  overflow: hidden;
+  cursor: default;
+}
+
+/* ---- Slide engine ---- */
+.deck {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 80px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  transform: translateX(40px);
+}
+
+.slide.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.slide.prev {
+  transform: translateX(-40px);
+}
+
+/* ---- Progress bar ---- */
+.progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--blue), var(--purple), var(--red));
+  transition: width 0.4s ease;
+  z-index: 100;
+}
+
+/* ---- Slide counter ---- */
+.counter {
+  position: fixed;
+  bottom: 24px;
+  right: 32px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg-3);
+  z-index: 100;
+}
+
+/* ---- Nav hint ---- */
+.nav-hint {
+  position: fixed;
+  bottom: 24px;
+  left: 32px;
+  font-size: 12px;
+  color: var(--fg-3);
+  opacity: 0.5;
+  z-index: 100;
+}
+
+/* ---- Shared components ---- */
+.stag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 16px;
+}
+
+.stag::before {
+  content: '// ';
+  color: var(--fg-3);
+  opacity: 0.4;
+}
+
+h1 {
+  font-size: clamp(36px, 5vw, 72px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1.5px;
+  max-width: 900px;
+  text-align: center;
+}
+
+h2 {
+  font-size: clamp(28px, 3.5vw, 52px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  max-width: 800px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  font-size: clamp(16px, 2vw, 22px);
+  color: var(--fg-2);
+  font-weight: 400;
+  max-width: 600px;
+  text-align: center;
+  line-height: 1.6;
+  margin-top: 20px;
+}
+
+/* Gradient text */
+.grad {
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.grad-red {
+  background: linear-gradient(135deg, var(--red), var(--amber));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.grad-green {
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---- Grid layouts ---- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  width: 100%;
+  max-width: 1000px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  max-width: 1000px;
+}
+
+.grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 1000px;
+}
+
+/* ---- Cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  border-color: #3f3f46;
+}
+
+.card-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.card p {
+  font-size: 14px;
+  color: var(--fg-2);
+  line-height: 1.6;
+}
+
+/* Service card variant */
+.svc-card {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.svc-card .svc-port {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.svc-card .svc-name {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.svc-card .svc-desc {
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+
+.svc-card.ssh  { border-top: 3px solid var(--blue); }
+.svc-card.ssh .svc-port  { color: var(--blue); }
+.svc-card.http { border-top: 3px solid var(--green); }
+.svc-card.http .svc-port { color: var(--green); }
+.svc-card.ftp  { border-top: 3px solid var(--amber); }
+.svc-card.ftp .svc-port  { color: var(--amber); }
+.svc-card.smb  { border-top: 3px solid var(--red); }
+.svc-card.smb .svc-port  { color: var(--red); }
+.svc-card.telnet { border-top: 3px solid var(--purple); }
+.svc-card.telnet .svc-port { color: var(--purple); }
+
+/* ---- Architecture diagram ---- */
+.arch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  width: 100%;
+  max-width: 1000px;
+}
+
+.arch-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  text-align: center;
+  min-width: 200px;
+  position: relative;
+}
+
+.arch-box.highlight {
+  border-color: var(--blue);
+  box-shadow: 0 0 40px rgba(59, 130, 246, 0.1);
+}
+
+.arch-box.highlight-red {
+  border-color: var(--red);
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.1);
+}
+
+.arch-box.highlight-green {
+  border-color: var(--green);
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.1);
+}
+
+.arch-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 8px;
+}
+
+.arch-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.arch-ip {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+.arch-arrow {
+  font-size: 28px;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+/* ---- Flow diagram ---- */
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 700px;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 16px 0;
+  position: relative;
+}
+
+.flow-num {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.flow-step:not(:last-child) .flow-num::after {
+  content: '';
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: calc(100% + 12px);
+  background: var(--border);
+}
+
+.flow-step:not(:last-child) {
+  padding-bottom: 24px;
+}
+
+.flow-content h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.flow-content p {
+  font-size: 14px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+.flow-step.active .flow-num {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+/* ---- Code block ---- */
+.code-block {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg-2);
+  width: 100%;
+  max-width: 700px;
+  overflow-x: auto;
+}
+
+.code-block .cmd { color: var(--green); }
+.code-block .flag { color: var(--amber); }
+.code-block .ip { color: var(--cyan); }
+.code-block .comment { color: var(--fg-3); font-style: italic; }
+
+/* ---- Stat row ---- */
+.stats-row {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 32px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ---- Capture list ---- */
+.capture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.capture-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.capture-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.capture-text {
+  color: var(--fg-2);
+}
+
+.capture-text strong {
+  color: var(--fg);
+}
+
+/* ---- Tech stack ---- */
+.tech-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.tech-badge {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg-2);
+}
+
+/* ---- Title slide specifics ---- */
+.title-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 20px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 100px;
+  color: var(--blue);
+  margin-bottom: 32px;
+}
+
+.title-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ---- Feature list ---- */
+.feat-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.feat-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  color: var(--fg-2);
+  padding: 10px 16px;
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.feat-list li .check {
+  color: var(--green);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ---- Terminal mockup ---- */
+.term-mock {
+  background: #0c0c0c;
+  border: 1px solid #333;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 700px;
+  overflow: hidden;
+}
+
+.term-mock-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.term-mock-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.term-mock-dot.r { background: #ef4444; }
+.term-mock-dot.y { background: #f59e0b; }
+.term-mock-dot.g { background: #22c55e; }
+
+.term-mock-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
+}
+
+.term-mock-body {
+  padding: 16px 20px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: #aaa;
+}
+
+.term-mock-body .prompt { color: var(--green); }
+.term-mock-body .cmd-text { color: #fff; font-weight: 500; }
+.term-mock-body .output { color: #888; }
+.term-mock-body .highlight { color: var(--amber); }
+.term-mock-body .danger { color: var(--red); }
+
+/* ---- Two-col layout ---- */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  width: 100%;
+  max-width: 1000px;
+  align-items: center;
+}
+
+.two-col .col {
+  display: flex;
+  flex-direction: column;
+}
+
+.two-col .col h3 {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.two-col .col p {
+  font-size: 15px;
+  color: var(--fg-2);
+  line-height: 1.7;
+}
+
+/* ---- Background glow ---- */
+.glow {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+.glow-blue { background: var(--blue); top: -100px; right: -100px; }
+.glow-purple { background: var(--purple); bottom: -100px; left: -100px; }
+.glow-red { background: var(--red); top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+/* ---- Animations ---- */
+.slide.active .fade-up {
+  animation: fadeUp 0.6s ease forwards;
+}
+
+.slide.active .fade-up-d1 { animation-delay: 0.1s; opacity: 0; }
+.slide.active .fade-up-d2 { animation-delay: 0.2s; opacity: 0; }
+.slide.active .fade-up-d3 { animation-delay: 0.3s; opacity: 0; }
+.slide.active .fade-up-d4 { animation-delay: 0.4s; opacity: 0; }
+.slide.active .fade-up-d5 { animation-delay: 0.5s; opacity: 0; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .slide { padding: 40px 24px; }
+  .grid-2, .grid-3, .grid-5 { grid-template-columns: 1fr; }
+  .arch { flex-direction: column; gap: 16px; }
+  .arch-arrow { transform: rotate(90deg); }
+  .two-col { grid-template-columns: 1fr; gap: 24px; }
+  .capture-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="counter" id="counter"></div>
+<div class="nav-hint">Fleches / Espace pour naviguer</div>
+
+<div class="deck" id="deck">
+
+  <!-- ========== SLIDE 1 : Title ========== -->
+  <div class="slide active">
+    <div class="glow glow-blue"></div>
+    <div class="glow glow-purple"></div>
+    <div class="title-badge fade-up">
+      <span class="dot"></span>
+      Projet Infrastructure & SI
+    </div>
+    <h1 class="fade-up fade-up-d1">Honeypot Lab</h1>
+    <p class="subtitle fade-up fade-up-d2">
+      Infrastructure de detection d'intrusions en temps reel<br>
+      avec monitoring multi-protocoles
+    </p>
+    <div class="stats-row fade-up fade-up-d3">
+      <div class="stat-item">
+        <div class="stat-value grad">5</div>
+        <div class="stat-label">Protocoles</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value grad-red">10</div>
+        <div class="stat-label">Attaques</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value grad-green">1</div>
+        <div class="stat-label">Dashboard</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 2 : What is a honeypot ========== -->
+  <div class="slide">
+    <div class="glow glow-red"></div>
+    <span class="stag fade-up">Concept</span>
+    <h2 class="fade-up fade-up-d1">C'est quoi un <span class="grad-red">honeypot</span> ?</h2>
+    <div class="grid-2 fade-up fade-up-d2">
+      <div class="card">
+        <span class="card-icon">&#x1F36F;</span>
+        <h3>Un piege numerique</h3>
+        <p>
+          Un honeypot est un systeme volontairement vulnerable, concu pour
+          attirer les attaquants. Il imite de vrais services (SSH, web, FTP...)
+          mais tout est surveille et enregistre.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#x1F50D;</span>
+        <h3>Pourquoi ?</h3>
+        <p>
+          Comprendre les techniques des attaquants, detecter les intrusions
+          en amont, collecter des indicateurs de compromission (IoC) et
+          renforcer la securite du vrai reseau.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 3 : Architecture ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Architecture</span>
+    <h2 class="fade-up fade-up-d1">Infrastructure <span class="grad">Proxmox</span></h2>
+    <div class="arch fade-up fade-up-d2">
+      <div class="arch-box highlight-red">
+        <div class="arch-label">CT 903 (template)</div>
+        <div class="arch-name">&#x1F5E1; Attaquant</div>
+        <div class="arch-ip">Clone dynamique</div>
+      </div>
+      <div class="arch-arrow">&#x27A1;</div>
+      <div class="arch-box highlight">
+        <div class="arch-label">CT 900</div>
+        <div class="arch-name">&#x1F36F; Honeypot</div>
+        <div class="arch-ip">10.30.30.10</div>
+      </div>
+      <div class="arch-arrow">&#x27A1;</div>
+      <div class="arch-box highlight-green">
+        <div class="arch-label">CT 901</div>
+        <div class="arch-name">&#x1F4CA; Dashboard</div>
+        <div class="arch-ip">10.30.30.20</div>
+      </div>
+    </div>
+    <div class="code-block fade-up fade-up-d3" style="margin-top:32px; max-width:800px; text-align:center; font-size:12px; color:var(--fg-3);">
+      Reseau isole <span class="ip">vmbr4 (10.30.30.0/24)</span> &mdash; Aucun acces au LAN reel<br>
+      Les containers attaquants sont <span class="flag">clones a la volee</span> puis <span class="cmd">detruits automatiquement</span>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 4 : Protocols ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Couverture</span>
+    <h2 class="fade-up fade-up-d1">5 protocoles <span class="grad">surveilles</span></h2>
+    <div class="grid-5 fade-up fade-up-d2">
+      <div class="card svc-card ssh">
+        <div class="svc-port">:22</div>
+        <div class="svc-name">SSH</div>
+        <div class="svc-desc">Cowrie<br>Credentials, commandes, sessions completes</div>
+      </div>
+      <div class="card svc-card http">
+        <div class="svc-port">:80</div>
+        <div class="svc-name">HTTP</div>
+        <div class="svc-desc">Faux WordPress<br>Probes, logins, scans de vulnerabilites</div>
+      </div>
+      <div class="card svc-card ftp">
+        <div class="svc-port">:21</div>
+        <div class="svc-name">FTP</div>
+        <div class="svc-desc">pyftpdlib<br>Brute force, telechargement de leurres</div>
+      </div>
+      <div class="card svc-card smb">
+        <div class="svc-port">:445</div>
+        <div class="svc-name">SMB</div>
+        <div class="svc-desc">Impacket<br>Auth NTLM, enumeration de partages</div>
+      </div>
+      <div class="card svc-card telnet">
+        <div class="svc-port">:23</div>
+        <div class="svc-name">Telnet</div>
+        <div class="svc-desc">Cowrie<br>Connexions, tentatives d'authentification</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 5 : How it works ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Fonctionnement</span>
+    <h2 class="fade-up fade-up-d1">Comment ca <span class="grad-green">marche</span> ?</h2>
+    <div class="flow fade-up fade-up-d2">
+      <div class="flow-step active">
+        <div class="flow-num">1</div>
+        <div class="flow-content">
+          <h3>L'attaquant se connecte</h3>
+          <p>Il croit interagir avec un vrai serveur. SSH, WordPress, FTP... tout semble authentique.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-content">
+          <h3>Le honeypot capture tout</h3>
+          <p>Chaque connexion, tentative de login, commande et fichier telecharge est enregistre en JSON.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-content">
+          <h3>Le dashboard analyse en temps reel</h3>
+          <p>Les logs sont lus via SSH, parses et affiches instantanement via WebSocket sur le dashboard.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-content">
+          <h3>Detection de patterns d'attaque</h3>
+          <p>Le moteur narratif detecte automatiquement les brute force, scans de vulnerabilites et intrusions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 6 : What we capture ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Collecte</span>
+    <h2 class="fade-up fade-up-d1">Ce qu'on <span class="grad-red">capture</span></h2>
+    <div class="capture-grid fade-up fade-up-d2">
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F511;</span>
+        <span class="capture-text"><strong>Identifiants</strong> &mdash; login + mot de passe testes</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F4BB;</span>
+        <span class="capture-text"><strong>Commandes</strong> &mdash; tout ce qui est tape dans le shell</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F310;</span>
+        <span class="capture-text"><strong>Requetes HTTP</strong> &mdash; URLs, user-agents, payloads</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F4C1;</span>
+        <span class="capture-text"><strong>Fichiers</strong> &mdash; malwares telecharges par l'attaquant</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F30D;</span>
+        <span class="capture-text"><strong>Geolocalisation</strong> &mdash; pays, ville, ISP de chaque IP</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F5C4;</span>
+        <span class="capture-text"><strong>Partages SMB</strong> &mdash; enumeration et acces aux shares</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x23F1;</span>
+        <span class="capture-text"><strong>Timeline</strong> &mdash; sequence chronologique de l'attaque</span>
+      </div>
+      <div class="capture-item">
+        <span class="capture-icon">&#x1F9EC;</span>
+        <span class="capture-text"><strong>Fingerprints</strong> &mdash; versions SSH, hassh, user-agents</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 7 : Dashboard ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Monitoring</span>
+    <h2 class="fade-up fade-up-d1">Dashboard <span class="grad">temps reel</span></h2>
+    <ul class="feat-list fade-up fade-up-d2">
+      <li><span class="check">&#x2713;</span> Feed d'activite en direct avec filtres par service</li>
+      <li><span class="check">&#x2713;</span> Carte mondiale des origines d'attaque (GeoIP)</li>
+      <li><span class="check">&#x2713;</span> Detection narrative automatique (brute force, intrusion, scan)</li>
+      <li><span class="check">&#x2713;</span> Historique des credentials captures</li>
+      <li><span class="check">&#x2713;</span> Sessions SSH detaillees avec timeline des commandes</li>
+      <li><span class="check">&#x2713;</span> Compteurs temps reel par protocole</li>
+    </ul>
+  </div>
+
+  <!-- ========== SLIDE 8 : Attack Simulator ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Simulation</span>
+    <h2 class="fade-up fade-up-d1">Simulateur <span class="grad-red">d'attaques</span></h2>
+    <div class="two-col fade-up fade-up-d2">
+      <div class="col">
+        <h3>10 scenarios d'attaque</h3>
+        <p>
+          Le dashboard peut lancer des containers attaquants automatiquement.
+          Chaque container est clone depuis un template, execute l'attaque,
+          puis est detruit.
+        </p>
+        <div class="tech-row" style="margin-top:20px; justify-content:flex-start;">
+          <span class="tech-badge">Port Scan</span>
+          <span class="tech-badge">Brute Force</span>
+          <span class="tech-badge">Infiltration</span>
+          <span class="tech-badge">SSH Flood</span>
+          <span class="tech-badge">Cred Stuffing</span>
+          <span class="tech-badge">Web Scan</span>
+          <span class="tech-badge">FTP Brute</span>
+          <span class="tech-badge">Telnet Brute</span>
+          <span class="tech-badge">SMB Enum</span>
+          <span class="tech-badge">Manual Shell</span>
+        </div>
+      </div>
+      <div class="col">
+        <div class="term-mock">
+          <div class="term-mock-bar">
+            <div class="term-mock-dot r"></div>
+            <div class="term-mock-dot y"></div>
+            <div class="term-mock-dot g"></div>
+            <span class="term-mock-title">Manual Shell - CT 951</span>
+          </div>
+          <div class="term-mock-body">
+            <span class="prompt">root@attacker:~#</span> <span class="cmd-text">nmap -sV 10.30.30.10</span><br>
+            <span class="output">PORT   STATE SERVICE  VERSION</span><br>
+            <span class="output">21/tcp open  ftp      pyftpdlib</span><br>
+            <span class="output">22/tcp open  ssh      OpenSSH 6.0</span><br>
+            <span class="output">80/tcp open  http     Apache 2.4</span><br>
+            <span class="output">445/tcp open smb      Samba 4.6</span><br>
+            <br>
+            <span class="prompt">root@attacker:~#</span> <span class="cmd-text">hydra -l admin -P pass.txt ssh://10.30.30.10:2222</span><br>
+            <span class="highlight">[2222][ssh] host: 10.30.30.10 login: admin password: password</span><br>
+            <br>
+            <span class="prompt">root@attacker:~#</span> <span class="cmd-text">curl http://10.30.30.10/wp-login.php</span><br>
+            <span class="danger">&lt;!-- Captured by honeypot --&gt;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 9 : Narrative Engine ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Intelligence</span>
+    <h2 class="fade-up fade-up-d1">Detection <span class="grad-green">automatique</span></h2>
+    <div class="grid-2 fade-up fade-up-d2">
+      <div class="card" style="border-left: 3px solid var(--red);">
+        <span class="card-icon">&#x1F6A8;</span>
+        <h3>Intrusion en cours</h3>
+        <p>
+          Detecte quand un attaquant reussit a se connecter et commence
+          a executer des commandes. Alerte critique immediate.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--amber);">
+        <span class="card-icon">&#x1F510;</span>
+        <h3>Brute force</h3>
+        <p>
+          Identifie les tentatives massives de login (5+ essais en 2 minutes)
+          sur tous les protocoles : SSH, FTP, HTTP, SMB.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--blue);">
+        <span class="card-icon">&#x1F50D;</span>
+        <h3>Scan de vulnerabilites</h3>
+        <p>
+          Repere les sondes automatisees qui testent des chemins sensibles :
+          .env, wp-config, phpMyAdmin, /admin...
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--purple);">
+        <span class="card-icon">&#x1F300;</span>
+        <h3>Flood de connexions</h3>
+        <p>
+          Alerte sur les rafales de connexions rapides (10+ en 2 minutes),
+          signe de scan de ports ou d'attaque DoS.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 10 : Tech stack ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Stack technique</span>
+    <h2 class="fade-up fade-up-d1">Technologies <span class="grad">utilisees</span></h2>
+    <div class="grid-3 fade-up fade-up-d2">
+      <div class="card" style="text-align:center;">
+        <span class="card-icon">&#x1F5A5;</span>
+        <h3>Infrastructure</h3>
+        <div class="tech-row" style="margin-top:12px;">
+          <span class="tech-badge">Proxmox VE</span>
+          <span class="tech-badge">LXC</span>
+          <span class="tech-badge">Debian 12</span>
+        </div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <span class="card-icon">&#x1F36F;</span>
+        <h3>Honeypots</h3>
+        <div class="tech-row" style="margin-top:12px;">
+          <span class="tech-badge">Cowrie</span>
+          <span class="tech-badge">Python</span>
+          <span class="tech-badge">Impacket</span>
+          <span class="tech-badge">pyftpdlib</span>
+        </div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <span class="card-icon">&#x1F4CA;</span>
+        <h3>Dashboard</h3>
+        <div class="tech-row" style="margin-top:12px;">
+          <span class="tech-badge">TypeScript</span>
+          <span class="tech-badge">Fastify</span>
+          <span class="tech-badge">WebSocket</span>
+          <span class="tech-badge">SQLite</span>
+          <span class="tech-badge">Leaflet</span>
+        </div>
+      </div>
+    </div>
+    <div class="grid-2 fade-up fade-up-d3" style="margin-top:24px;">
+      <div class="card" style="text-align:center;">
+        <span class="card-icon">&#x1F5E1;</span>
+        <h3>Outils d'attaque</h3>
+        <div class="tech-row" style="margin-top:12px;">
+          <span class="tech-badge">nmap</span>
+          <span class="tech-badge">hydra</span>
+          <span class="tech-badge">nikto</span>
+          <span class="tech-badge">smbclient</span>
+          <span class="tech-badge">sshpass</span>
+        </div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <span class="card-icon">&#x1F310;</span>
+        <h3>Reseau</h3>
+        <div class="tech-row" style="margin-top:12px;">
+          <span class="tech-badge">VLAN isole</span>
+          <span class="tech-badge">iptables NAT</span>
+          <span class="tech-badge">Tailscale</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 11 : Security ========== -->
+  <div class="slide">
+    <span class="stag fade-up">Securite</span>
+    <h2 class="fade-up fade-up-d1">Isolation & <span class="grad-red">risques</span></h2>
+    <div class="grid-2 fade-up fade-up-d2" style="max-width:900px;">
+      <div class="card">
+        <h3 style="color:var(--green);">Mesures de protection</h3>
+        <p style="margin-top:12px;">
+          &#x2713; Reseau isole (vmbr4) sans route vers le LAN<br><br>
+          &#x2713; Containers attaquants ephemeres (crees puis detruits)<br><br>
+          &#x2713; Honeypot sans acces aux vrais systemes<br><br>
+          &#x2713; Aucune donnee reelle exposee (fichiers leurres)
+        </p>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--red);">Risques identifies</h3>
+        <p style="margin-top:12px;">
+          &#x26A0; Pivot depuis le honeypot vers le reseau &rarr; VLAN<br><br>
+          &#x26A0; Detection du piege par l'attaquant &rarr; Bannieres realistes<br><br>
+          &#x26A0; Surcharge de logs &rarr; Rotation + SQLite<br><br>
+          &#x26A0; Aspects legaux &rarr; Lab ferme, pas de vraies donnees
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SLIDE 12 : Demo ========== -->
+  <div class="slide">
+    <div class="glow glow-blue"></div>
+    <div class="glow glow-purple"></div>
+    <span class="stag fade-up">Live</span>
+    <h1 class="fade-up fade-up-d1" style="font-size:clamp(40px,6vw,80px);">
+      <span class="grad">Demo</span>
+    </h1>
+    <p class="subtitle fade-up fade-up-d2">
+      Lancement d'attaques en direct sur le honeypot<br>
+      et observation en temps reel sur le dashboard
+    </p>
+    <div class="stats-row fade-up fade-up-d3" style="margin-top:48px;">
+      <div class="stat-item">
+        <div class="stat-value" style="font-size:20px; color:var(--fg-3); font-weight:500;">Dashboard</div>
+        <div class="stat-label" style="font-family:var(--mono); color:var(--cyan);">http://10.30.30.20:3080</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const progress = document.getElementById('progress');
+const counter = document.getElementById('counter');
+let current = 0;
+
+function goTo(idx) {
+  if (idx < 0 || idx >= slides.length) return;
+  slides[current].classList.remove('active');
+  if (idx > current) slides[current].classList.add('prev');
+  current = idx;
+  slides.forEach(s => s.classList.remove('prev'));
+  slides[current].classList.add('active');
+  progress.style.width = ((current / (slides.length - 1)) * 100) + '%';
+  counter.textContent = `${current + 1} / ${slides.length}`;
+}
+
+function next() { goTo(current + 1); }
+function prev() { goTo(current - 1); }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prev(); }
+  if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+  if (e.key === 'End') { e.preventDefault(); goTo(slides.length - 1); }
+});
+
+// Touch support
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
+});
+
+// Click navigation (left/right halves)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('a, button, input')) return;
+  if (e.clientX > window.innerWidth * 0.6) next();
+  else if (e.clientX < window.innerWidth * 0.4) prev();
+});
+
+// Init
+goTo(0);
+</script>
+
+</body>
+</html>
