@@ -89,6 +89,7 @@ function connectWs() {
       case "event": handleEvent(msg.data); break;
       case "stats": updateStats(msg.data); break;
       case "attacker_update": updateAttacker(msg.data); break;
+      case "terminal-output": handleTerminalOutput(msg.data); break;
     }
   };
 }
@@ -729,6 +730,10 @@ function renderAttackers() {
         </div>`
       : "";
 
+    const termBtn = a.attackType === "manual" && a.status === "running"
+      ? `<button class="atk-term-btn" onclick="event.stopPropagation(); openTerminal(${a.vmid})">Open Shell</button>`
+      : "";
+
     return `<div class="atk-card" data-type="${esc(a.attackType)}">
       <div class="atk-card-head">
         <span class="atk-dot ${a.status}"></span>
@@ -741,6 +746,7 @@ function renderAttackers() {
         ${a.ip ? `<span class="atk-card-ip">${a.ip}</span>` : ""}
       </div>
       <div class="atk-card-status">${statusMsg}</div>
+      ${termBtn}
       ${stepsDetail}
       <div class="atk-steps">${stepsHtml}</div>
     </div>`;
@@ -1089,6 +1095,140 @@ setInterval(() => {
     renderNarrative();
   }
 }, 10000);
+
+// ── Terminal ──
+let termVmid = null;
+let termBusy = false;
+const termHistory = [];
+let termHistoryIdx = -1;
+
+function openTerminal(vmid) {
+  termVmid = vmid;
+  termBusy = false;
+  termHistoryIdx = -1;
+  const overlay = document.getElementById("termOverlay");
+  const output = document.getElementById("termOutput");
+  const input = document.getElementById("termInput");
+  document.getElementById("termVmid").textContent = `CT ${vmid}`;
+
+  // Reset output to welcome message
+  output.innerHTML = `
+    <div class="term-welcome">
+      <span class="term-welcome-line">Connected to attacker container CT ${vmid}</span>
+      <span class="term-welcome-line">Target: 10.30.30.10 (SSH:2222 HTTP:80 FTP:21 SMB:445 Telnet:23)</span>
+      <span class="term-welcome-line">Tools: nmap, hydra, nikto, curl, smbclient, sshpass, netcat</span>
+      <span class="term-welcome-line term-hint">All commands run inside the attacker container. The honeypot captures everything.</span>
+    </div>`;
+
+  overlay.style.display = "flex";
+  input.value = "";
+  input.disabled = false;
+  input.focus();
+}
+
+function closeTerminal() {
+  document.getElementById("termOverlay").style.display = "none";
+  termVmid = null;
+  termBusy = false;
+}
+
+function handleTermKey(e) {
+  if (e.key === "Enter" && !termBusy) {
+    const input = document.getElementById("termInput");
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    // History
+    termHistory.push(cmd);
+    termHistoryIdx = termHistory.length;
+
+    sendTermCmd(cmd);
+    input.value = "";
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (termHistory.length === 0) return;
+    termHistoryIdx = Math.max(0, termHistoryIdx - 1);
+    document.getElementById("termInput").value = termHistory[termHistoryIdx] || "";
+  } else if (e.key === "ArrowDown") {
+    e.preventDefault();
+    termHistoryIdx = Math.min(termHistory.length, termHistoryIdx + 1);
+    document.getElementById("termInput").value = termHistory[termHistoryIdx] || "";
+  } else if (e.key === "Escape") {
+    closeTerminal();
+  }
+}
+
+function sendTermCmd(cmd) {
+  if (!ws || ws.readyState !== 1 || !termVmid) return;
+
+  termBusy = true;
+  document.getElementById("termInput").disabled = true;
+
+  const output = document.getElementById("termOutput");
+
+  // Show command line
+  const cmdDiv = document.createElement("div");
+  cmdDiv.className = "term-cmd-line";
+  cmdDiv.innerHTML = `<span class="term-cmd-prompt">root@attacker:~#</span> <span class="term-cmd-text">${esc(cmd)}</span>`;
+  output.appendChild(cmdDiv);
+
+  // Show "running..." indicator
+  const runDiv = document.createElement("div");
+  runDiv.className = "term-cmd-running";
+  runDiv.id = "termRunning";
+  runDiv.textContent = "Running...";
+  output.appendChild(runDiv);
+  output.scrollTop = output.scrollHeight;
+
+  // Create output container for streaming
+  const outDiv = document.createElement("div");
+  outDiv.className = "term-cmd-output";
+  outDiv.id = "termCurrentOutput";
+  output.insertBefore(outDiv, runDiv);
+
+  // Send command via WebSocket
+  ws.send(JSON.stringify({ type: "terminal-cmd", vmid: termVmid, cmd }));
+}
+
+function handleTerminalOutput(data) {
+  if (data.vmid !== termVmid) return;
+
+  const output = document.getElementById("termOutput");
+  const outDiv = document.getElementById("termCurrentOutput");
+  const runDiv = document.getElementById("termRunning");
+
+  if (data.output && outDiv) {
+    outDiv.textContent += data.output;
+    output.scrollTop = output.scrollHeight;
+  }
+
+  if (data.done) {
+    // Remove running indicator
+    if (runDiv) runDiv.remove();
+
+    // Show error if any
+    if (data.error) {
+      const errDiv = document.createElement("div");
+      errDiv.className = "term-cmd-output term-cmd-error";
+      errDiv.textContent = data.error;
+      output.appendChild(errDiv);
+    }
+
+    // Clear current output ID so next command gets its own container
+    if (outDiv) outDiv.removeAttribute("id");
+
+    termBusy = false;
+    const input = document.getElementById("termInput");
+    input.disabled = false;
+    input.focus();
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+// Close terminal on overlay click (not panel click)
+document.getElementById("termOverlay")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeTerminal();
+});
 
 // ── Init ──
 loadInitialData().then(() => connectWs());

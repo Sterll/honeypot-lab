@@ -293,4 +293,49 @@ export function getActiveAttackers(): AttackerContainer[] {
   return Array.from(activeAttackers.values());
 }
 
+// Execute a command in a running container and return output via callback
+export function execInContainer(
+  vmid: number,
+  command: string,
+  onOutput: (data: string) => void,
+  onDone: (error?: string) => void
+): void {
+  const attacker = activeAttackers.get(vmid);
+  if (!attacker || attacker.status !== "running") {
+    onDone("Container not running");
+    return;
+  }
+  if (attacker.attackType !== "manual") {
+    onDone("Terminal only available for manual shell");
+    return;
+  }
+
+  const b64 = Buffer.from(command).toString("base64");
+  const sshCommand = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p ${PROXMOX_SSH_PORT} ${PROXMOX_SSH} "pct exec ${vmid} -- bash -c 'echo ${b64} | base64 -d | bash 2>&1'"`;
+
+  const child = exec(sshCommand, { timeout: 120000 });
+  let output = "";
+
+  child.stdout?.on("data", (data: string) => {
+    output += data;
+    onOutput(data);
+  });
+
+  child.stderr?.on("data", (data: string) => {
+    const msg = data.trim();
+    if (msg && !msg.includes("Warning:") && !msg.includes("known_hosts")) {
+      output += data;
+      onOutput(data);
+    }
+  });
+
+  child.on("close", (code) => {
+    onDone(code && code !== 0 ? `Exit code: ${code}` : undefined);
+  });
+
+  child.on("error", (err) => {
+    onDone(err.message);
+  });
+}
+
 export { HONEYPOT_IP };

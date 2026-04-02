@@ -203,6 +203,29 @@
     </div>
   </main>
 
+  <!-- Terminal overlay -->
+  <div class="term-overlay" id="termOverlay" style="display:none">
+    <div class="term-panel">
+      <div class="term-bar">
+        <span class="term-title" id="termTitle">Manual Shell</span>
+        <span class="term-vmid" id="termVmid"></span>
+        <button class="term-close" onclick="closeTerminal()">&times;</button>
+      </div>
+      <div class="term-output" id="termOutput">
+        <div class="term-welcome">
+          <span class="term-welcome-line">Connected to attacker container</span>
+          <span class="term-welcome-line">Target: 10.30.30.10 (SSH:2222 HTTP:80 FTP:21 SMB:445 Telnet:23)</span>
+          <span class="term-welcome-line">Tools: nmap, hydra, nikto, curl, smbclient, sshpass, netcat</span>
+          <span class="term-welcome-line term-hint">All commands run inside the attacker container. The honeypot captures everything.</span>
+        </div>
+      </div>
+      <div class="term-input-row">
+        <span class="term-prompt">root@attacker:~#</span>
+        <input class="term-input" id="termInput" type="text" spellcheck="false" autocomplete="off" placeholder="Type a command..." onkeydown="handleTermKey(event)">
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/app.js"></script>
 </body>

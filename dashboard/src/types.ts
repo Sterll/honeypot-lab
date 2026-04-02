@@ -78,8 +78,22 @@ export interface DashboardStats {
   smbSessions: number;
 }
 
+// Terminal session
+export interface TerminalOutput {
+  vmid: number;
+  output: string;
+  done?: boolean;
+  error?: string;
+}
+
 // WebSocket message types
 export interface WsMessage {
-  type: "event" | "stats" | "attacker_update";
-  data: CowrieEvent | DashboardStats | AttackerContainer;
+  type: "event" | "stats" | "attacker_update" | "terminal-output";
+  data: CowrieEvent | DashboardStats | AttackerContainer | TerminalOutput;
+}
+
+export interface WsIncoming {
+  type: "terminal-cmd";
+  vmid: number;
+  cmd: string;
 }

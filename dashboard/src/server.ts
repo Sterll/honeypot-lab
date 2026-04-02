@@ -6,8 +6,8 @@ import type { WebSocket } from "ws";
 import { initDatabase, insertEvent, getEvents, getStats, getCredentials, getSessions, getSessionCommands, getGeoData, resetData } from "./db";
 import { LogWatcher } from "./log-watcher";
 import { lookupGeoIp } from "./geoip";
-import { spawnAttacker, destroyAttacker, getActiveAttackers, setAttackerUpdateCallback } from "./proxmox";
-import type { HoneypotEvent, WsMessage, AttackType } from "./types";
+import { spawnAttacker, destroyAttacker, getActiveAttackers, setAttackerUpdateCallback, execInContainer } from "./proxmox";
+import type { HoneypotEvent, WsMessage, WsIncoming, AttackType } from "./types";
 
 // Disable TLS verification for Proxmox self-signed certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -74,6 +74,25 @@ app.register(async function (fastify) {
     for (const attacker of getActiveAttackers()) {
       socket.send(JSON.stringify({ type: "attacker_update", data: attacker }));
     }
+
+    socket.on("message", (raw: Buffer | string) => {
+      try {
+        const msg: WsIncoming = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+        if (msg.type === "terminal-cmd" && msg.vmid && msg.cmd) {
+          console.log(`[terminal] CMD in CT ${msg.vmid}: ${msg.cmd}`);
+          execInContainer(
+            msg.vmid,
+            msg.cmd,
+            (output) => {
+              socket.send(JSON.stringify({ type: "terminal-output", data: { vmid: msg.vmid, output } }));
+            },
+            (error) => {
+              socket.send(JSON.stringify({ type: "terminal-output", data: { vmid: msg.vmid, output: "", done: true, error } }));
+            }
+          );
+        }
+      } catch { /* ignore invalid messages */ }
+    });
 
     socket.on("close", () => {
       wsClients.delete(socket);
