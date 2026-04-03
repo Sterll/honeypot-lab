@@ -21,13 +21,55 @@ export function setAttackerUpdateCallback(cb: (attacker: AttackerContainer) => v
 
 function sshExec(cmd: string, timeout = 60000): string {
   const sshCmd = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p ${PROXMOX_SSH_PORT} ${PROXMOX_SSH} "${cmd.replace(/"/g, '\\"')}"`;
-  return execSync(sshCmd, { timeout, encoding: "utf8" }).trim();
+  try {
+    return execSync(sshCmd, { timeout, encoding: "utf8" }).trim();
+  } catch (err: any) {
+    const stderr = err.stderr?.toString().trim() || "";
+    const stdout = err.stdout?.toString().trim() || "";
+    throw new ProxmoxError(
+      stderr || stdout || `SSH command failed (exit ${err.status})`,
+      cmd
+    );
+  }
+}
+
+export class ProxmoxError extends Error {
+  public readonly command: string;
+  constructor(message: string, command: string) {
+    super(message);
+    this.name = "ProxmoxError";
+    this.command = command;
+  }
+}
+
+function ctExists(vmid: number): boolean {
+  try {
+    sshExec(`pct config ${vmid}`, 10000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ctStatus(vmid: number): "running" | "stopped" | "unknown" {
+  try {
+    const out = sshExec(`pct status ${vmid}`, 10000);
+    if (out.includes("running")) return "running";
+    if (out.includes("stopped")) return "stopped";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 function getNextVmid(): number {
-  const output = sshExec("pct list | tail -n +2 | awk '{print $1}'");
+  let output: string;
+  try {
+    output = sshExec("pct list | tail -n +2 | awk '{print $1}'");
+  } catch (err) {
+    throw new ProxmoxError("Cannot reach Proxmox host to list containers", "pct list");
+  }
   const usedIds = new Set(output.split("\n").filter(Boolean).map(Number));
-  // Also skip VMIDs tracked locally or reserved by in-flight clones
   for (const vmid of activeAttackers.keys()) usedIds.add(vmid);
   for (const vmid of reservedVmids) usedIds.add(vmid);
   for (let id = 950; id < 999; id++) {
@@ -36,7 +78,10 @@ function getNextVmid(): number {
       return id;
     }
   }
-  throw new Error("No available VMID in 950-999 range");
+  throw new ProxmoxError(
+    "No available VMID in 950-999 range. Destroy existing attacker containers first.",
+    "getNextVmid"
+  );
 }
 
 function getAttackerIp(vmid: number): string {
@@ -203,6 +248,12 @@ export async function spawnAttacker(
   activeAttackers.set(vmid, attacker);
 
   try {
+    // Safety check: if a CT with this VMID somehow still exists, clean it up first
+    if (ctExists(vmid)) {
+      console.warn(`[proxmox] CT ${vmid} already exists, cleaning up...`);
+      await forceDestroyContainer(vmid);
+    }
+
     console.log(`[proxmox] Cloning template ${TEMPLATE_VMID} -> CT ${vmid}`);
     sshExec(
       `pct clone ${TEMPLATE_VMID} ${vmid} --hostname ${name} --full --storage ${STORAGE}`,
@@ -217,13 +268,18 @@ export async function spawnAttacker(
     console.log(`[proxmox] Starting CT ${vmid}`);
     sshExec(`pct start ${vmid}`);
 
-    // Wait for it to be running
+    // Wait for it to be running (max 30s)
+    let started = false;
     for (let i = 0; i < 15; i++) {
       await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const status = sshExec(`pct status ${vmid}`);
-        if (status.includes("running")) break;
-      } catch { /* not ready */ }
+      if (ctStatus(vmid) === "running") {
+        started = true;
+        break;
+      }
+    }
+
+    if (!started) {
+      throw new ProxmoxError(`CT ${vmid} failed to start within 30s`, "pct start");
     }
 
     attacker.status = "running";
@@ -240,13 +296,26 @@ export async function spawnAttacker(
     return attacker;
   } catch (error) {
     attacker.status = "finished";
-    console.error(`[proxmox] Failed to spawn attacker ${vmid}:`, error);
-    // Try to cleanup
-    try { sshExec(`pct stop ${vmid} 2>/dev/null; pct destroy ${vmid} --purge 2>/dev/null`); } catch {}
+    const msg = error instanceof ProxmoxError ? error.message : String(error);
+    console.error(`[proxmox] Failed to spawn attacker ${vmid}: ${msg}`);
+    // Best-effort cleanup
+    await forceDestroyContainer(vmid).catch(() => {});
     activeAttackers.delete(vmid);
     reservedVmids.delete(vmid);
     throw error;
   }
+}
+
+async function forceDestroyContainer(vmid: number): Promise<void> {
+  try {
+    if (ctStatus(vmid) === "running") {
+      sshExec(`pct stop ${vmid}`, 30000);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  } catch { /* already stopped or doesn't exist */ }
+  try {
+    sshExec(`pct destroy ${vmid} --purge`, 30000);
+  } catch { /* already destroyed */ }
 }
 
 function scheduleAttack(vmid: number, script: string, attackType: string): void {
@@ -289,14 +358,22 @@ export async function destroyAttacker(vmid: number): Promise<void> {
     attacker.status = "destroying";
   }
 
+  // Check if the container actually exists before trying to destroy
+  if (!ctExists(vmid)) {
+    console.warn(`[proxmox] CT ${vmid} does not exist, cleaning up local state`);
+    activeAttackers.delete(vmid);
+    reservedVmids.delete(vmid);
+    return;
+  }
+
   try {
     console.log(`[proxmox] Destroying CT ${vmid}`);
-    sshExec(`pct stop ${vmid} 2>/dev/null || true`);
-    await new Promise((r) => setTimeout(r, 3000));
-    sshExec(`pct destroy ${vmid} --purge 2>/dev/null || true`);
+    await forceDestroyContainer(vmid);
     console.log(`[proxmox] CT ${vmid} destroyed`);
   } catch (error) {
-    console.error(`[proxmox] Failed to destroy CT ${vmid}:`, error);
+    const msg = error instanceof ProxmoxError ? error.message : String(error);
+    console.error(`[proxmox] Failed to destroy CT ${vmid}: ${msg}`);
+    // Don't throw - best effort destruction, always clean up local state
   }
 
   activeAttackers.delete(vmid);

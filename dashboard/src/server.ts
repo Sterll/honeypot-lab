@@ -6,7 +6,7 @@ import type { WebSocket } from "ws";
 import { initDatabase, insertEvent, getEvents, getStats, getCredentials, getSessions, getSessionCommands, getGeoData, resetData } from "./db";
 import { LogWatcher } from "./log-watcher";
 import { lookupGeoIp } from "./geoip";
-import { spawnAttacker, destroyAttacker, getActiveAttackers, setAttackerUpdateCallback, execInContainer } from "./proxmox";
+import { spawnAttacker, destroyAttacker, getActiveAttackers, setAttackerUpdateCallback, execInContainer, ProxmoxError } from "./proxmox";
 import type { HoneypotEvent, WsMessage, WsIncoming, AttackType } from "./types";
 
 // Disable TLS verification for Proxmox self-signed certs
@@ -132,31 +132,52 @@ app.get("/api/attackers", async () => {
   return getActiveAttackers();
 });
 
-app.post("/api/attack/:type", async (req) => {
+app.post("/api/attack/:type", async (req, reply) => {
   const { type } = req.params as { type: string };
   const validTypes: AttackType[] = ["scan", "bruteforce", "manual", "infiltration", "sshflood", "credstuffing", "webscan", "ftpbrute", "telnetbrute", "smbenum"];
   if (!validTypes.includes(type as AttackType)) {
-    return { error: "Invalid attack type" };
+    return reply.code(400).send({ error: `Invalid attack type: ${type}` });
   }
-  const attacker = await spawnAttacker(type as AttackType);
-  broadcast({ type: "attacker_update", data: attacker as unknown as HoneypotEvent });
-  return attacker;
+  try {
+    const attacker = await spawnAttacker(type as AttackType);
+    broadcast({ type: "attacker_update", data: attacker as unknown as HoneypotEvent });
+    return attacker;
+  } catch (err) {
+    const message = err instanceof ProxmoxError ? err.message : "Failed to spawn attacker";
+    console.error(`[api] POST /api/attack/${type} failed: ${message}`);
+    return reply.code(500).send({ error: message });
+  }
 });
 
-app.post("/api/reset", async () => {
-  resetData();
-  broadcast({ type: "stats", data: getStats() as unknown as HoneypotEvent });
-  return { ok: true };
+app.post("/api/reset", async (_req, reply) => {
+  try {
+    resetData();
+    broadcast({ type: "stats", data: getStats() as unknown as HoneypotEvent });
+    return { ok: true };
+  } catch (err) {
+    console.error("[api] POST /api/reset failed:", err);
+    return reply.code(500).send({ error: "Failed to reset data" });
+  }
 });
 
-app.delete("/api/attack/:vmid", async (req) => {
+app.delete("/api/attack/:vmid", async (req, reply) => {
   const { vmid } = req.params as { vmid: string };
-  await destroyAttacker(parseInt(vmid));
-  broadcast({
-    type: "attacker_update",
-    data: { vmid: parseInt(vmid), status: "destroying" } as unknown as HoneypotEvent,
-  });
-  return { ok: true };
+  const id = parseInt(vmid);
+  if (isNaN(id) || id < 950 || id > 999) {
+    return reply.code(400).send({ error: `Invalid VMID: ${vmid}` });
+  }
+  try {
+    await destroyAttacker(id);
+    broadcast({
+      type: "attacker_update",
+      data: { vmid: id, status: "destroying" } as unknown as HoneypotEvent,
+    });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof ProxmoxError ? err.message : "Failed to destroy attacker";
+    console.error(`[api] DELETE /api/attack/${vmid} failed: ${message}`);
+    return reply.code(500).send({ error: message });
+  }
 });
 
 // Catch-all: redirect unknown routes to /
