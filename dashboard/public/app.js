@@ -45,10 +45,12 @@ function timeAgo(ts) {
 }
 
 function formatDuration(sec) {
-  if (!sec && sec !== 0) return "";
-  if (sec < 60) return `${sec.toFixed(1)}s`;
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
+  if (sec === null || sec === undefined || sec === "") return "";
+  const n = typeof sec === "number" ? sec : parseFloat(sec);
+  if (isNaN(n)) return "";
+  if (n < 60) return `${n.toFixed(1)}s`;
+  const m = Math.floor(n / 60);
+  const s = Math.floor(n % 60);
   return `${m}m ${s}s`;
 }
 
